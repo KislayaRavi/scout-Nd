@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "scout-nd"
+version = "0.1.0"
+description = "Optimizer of constrained stochastic problems where derivatives are unavailable"
+authors = ["Kislaya Ravi <kislayaravi24@gmail.com>", "Atul Agrawal <atulagrawal0711@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "scout_nd"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
