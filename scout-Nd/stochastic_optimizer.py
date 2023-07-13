@@ -1,11 +1,6 @@
 import numpy as np
-import jax
-import jax.numpy as jnp
-from jax import grad, jit, vmap
-from jax.scipy.stats import norm
 from scipy.optimize import  minimize
-from jax import random
-import numpyro.distributions as dist
+import torch 
 import matplotlib.pyplot as plt
 seed = 0
 
@@ -18,18 +13,20 @@ class Stochastic_Optimizer(object):
         self.dim, self.func, self.distribution = dim, func, distribution
         self.f_list = [self.func]
 
+    def grad_logpdf_one_sample(self, mean, scaled_sigma, sample):
+        m = torch.tensor(mean, requires_grad=True)
+        ss = torch.tensor(scaled_sigma, requires_grad=True)
+        dist = torch.distributions.MultivariateNormal(m, torch.diag(torch.exp(ss)))
+        val = dist.log_prob(torch.tensor(sample))
+        val.backward()
+        grad_mean, grad_sigma = m.grad, ss.grad
+        return np.array(np.concatenate([grad_mean, grad_sigma]))
+
     def grad_logpdf(self, mean, scaled_sigma, samples):
         num_samples = len(samples)
-        def log_density(mu, log_sigma, sample):
-            l_density = jnp.sum(norm.logpdf(sample, loc=mu, scale=jnp.exp(log_sigma)))
-            return l_density
-        # jacobian_fn = jax.jacfwd(log_density, argnums=0)
-        grad_density = grad(log_density, argnums=(0,1))
         grad_array = np.zeros((num_samples, 2*self.dim))
-        # TODO: Use vmap in calculation of gradient of log density
-        for idx, sample in enumerate(samples):
-            grad_mean, grad_sigma = grad_density(mean, scaled_sigma, sample)
-            grad_array[idx, :] = np.array(jnp.concatenate([grad_mean, grad_sigma]))
+        for i in range(num_samples):
+            grad_array[i, :] = self.grad_logpdf_one_sample(mean, scaled_sigma, samples[i, :])
         return grad_array
 
     def approximate_derivative_baseline(self, f_val, grad_logpdf_val, num_samples):
@@ -42,8 +39,10 @@ class Stochastic_Optimizer(object):
     def function_wrapper(self, x, num_samples=100):
         mean, scaled_sigma = x[:self.dim], x[self.dim:]
         #TODO: Write a separate class for sampling
-        distribution = dist.Normal(loc=mean, scale=jnp.exp(scaled_sigma)) 
-        samples = distribution.sample(random.PRNGKey(seed), (num_samples,))
+        if self.dim == 1:
+            samples = np.random.normal(mean, np.exp(scaled_sigma), size=(num_samples, self.dim))
+        else:
+            samples = np.random.multivariate_normal(mean, np.diag(np.exp(scaled_sigma)), size=(num_samples,))
         grad_logpdf_val = self.grad_logpdf(mean, scaled_sigma, samples)
         mean_array, grad_array = np.zeros(len(self.f_list)), np.zeros((len(self.f_list), 2*self.dim))
         for idx, func in enumerate(self.f_list):
@@ -53,7 +52,7 @@ class Stochastic_Optimizer(object):
         # Potential Idea: Polynomial Chaos Expansion with sparse grid to calculate expectation
         return np.sum(mean_array), np.sum(grad_array, axis=0)
 
-    def optimize_no_constraints(self, maxiter=100, method='CG'):
+    def optimize_no_constraints(self, maxiter=100, method='BFGS'):
         options = {'maxiter':maxiter}
         mean_starting_point = np.ones(self.dim)
         scaled_sigma_starting_point = 0.1*np.ones(self.dim) #If we make this large then the estimation of gradient is very bad
@@ -71,8 +70,8 @@ class Stochastic_Optimizer(object):
         options = {'maxiter':maxiter}
         mean_starting_point = np.ones(self.dim)
         num_constraints = len(constraints)
-        c = np.zeros(num_constraints) + 1
-        scaled_sigma_starting_point = -2*np.ones(self.dim) #If we make this large then the estimation of gradient is very bad
+        c = np.zeros(num_constraints) - 2
+        scaled_sigma_starting_point = np.zeros(self.dim) #If we make this large then the estimation of gradient is very bad
         # TODO: Following process of changing lambda is not good. Maybe simply increase lambda
         for i in range(5):
             lambdas = 10**c
@@ -82,22 +81,17 @@ class Stochastic_Optimizer(object):
             else:
                 starting_point = results.x
             results = minimize(self.function_wrapper, starting_point, jac=True, method=method, options=options)
-            for j in range(num_constraints):
-                val_constraint = constraints[j](results.x)
-                if val_constraint <= 0:
-                    c[j] -= 1
-                else:
-                    c[j] += 1
-                print('Updated optimum point and c after ', i, ' optimization ', results.x, c)
-                print('Gradient at optimum', self.function_wrapper(results.x))
-                # print('penalty', self.penalty(results.x, lambdas, constraints))
+            c = c + 1
+            print('Updated optimum point and c after ', i, ' optimization ', results.x, c)
+            print('Gradient at optimum', self.function_wrapper(results.x))
+            # print('penalty', self.penalty(results.x, lambdas, constraints))
         return results
 
 
 def sphere(x):
     val1 = np.sum(x**2, axis=1)
-    # val2 = np.random.normal(0, 0.0001, val1.shape)
-    val2 = 0
+    val2 = np.random.normal(0, 0.0001, val1.shape)
+    # val2 = 0
     return val1 + val2
 
 # TODO: try other benchmarks
