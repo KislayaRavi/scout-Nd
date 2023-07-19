@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.optimize import  minimize
-import torch 
+import torch
+from objective_function import *
 import matplotlib.pyplot as plt
 seed = 0
 
@@ -9,107 +10,88 @@ seed = 0
 
 class Stochastic_Optimizer(object):
 
-    def __init__(self, dim, func, distribution='gaussian'):
-        self.dim, self.func, self.distribution = dim, func, distribution
-        self.f_list = [self.func]
-
-    def grad_logpdf_one_sample(self, mean, scaled_sigma, sample):
-        m = torch.tensor(mean, requires_grad=True)
-        ss = torch.tensor(scaled_sigma, requires_grad=True)
-        dist = torch.distributions.MultivariateNormal(m, torch.diag(torch.exp(ss)))
-        val = dist.log_prob(torch.tensor(sample))
-        val.backward()
-        grad_mean, grad_sigma = m.grad, ss.grad
-        return np.array(np.concatenate([grad_mean, grad_sigma]))
-
-    def grad_logpdf(self, mean, scaled_sigma, samples):
-        num_samples = len(samples)
-        grad_array = np.zeros((num_samples, 2*self.dim))
-        for i in range(num_samples):
-            grad_array[i, :] = self.grad_logpdf_one_sample(mean, scaled_sigma, samples[i, :])
-        return grad_array
-
-    def approximate_derivative_baseline(self, f_val, grad_logpdf_val, num_samples):
-        s = np.sum(f_val)
-        B = (s - f_val)/(num_samples - 1)
-        f_var_red = np.reshape(f_val - B, (num_samples,1))
-        grad_val = np.mean(f_var_red * grad_logpdf_val, axis=0)
-        return grad_val
-
-    def function_wrapper(self, x, num_samples=100):
-        mean, scaled_sigma = x[:self.dim], x[self.dim:]
-        #TODO: Write a separate class for sampling
-        if self.dim == 1:
-            samples = np.random.normal(mean, np.exp(scaled_sigma), size=(num_samples, self.dim))
+    def __init__(self, objective: ObjectiveAbstract, **kwargs:dict):
+        self.objective = objective
+        self.dim = self.objective.dim
+        if 'initial_val' in kwargs.keys():
+            self.set_initial_val(kwargs['initial_val'])
         else:
-            samples = np.random.multivariate_normal(mean, np.diag(np.exp(scaled_sigma)), size=(num_samples,))
-        grad_logpdf_val = self.grad_logpdf(mean, scaled_sigma, samples)
-        mean_array, grad_array = np.zeros(len(self.f_list)), np.zeros((len(self.f_list), 2*self.dim))
-        for idx, func in enumerate(self.f_list):
-            f_val = func(samples)
-            mean_array[idx] = np.mean(f_val)
-            grad_array[idx, :] = self.approximate_derivative_baseline(f_val, grad_logpdf_val, num_samples)
-        # Potential Idea: Polynomial Chaos Expansion with sparse grid to calculate expectation
-        return np.sum(mean_array), np.sum(grad_array, axis=0)
+            x0 = np.ones(2*self.dim)
+            x0[self.dim:] = -1
+            self.set_initial_val(x0)
+        self.stored_results = [self.initial_val]        
+        self.optimizer = None
 
-    def optimize_no_constraints(self, maxiter=100, method='BFGS'):
-        options = {'maxiter':maxiter}
-        mean_starting_point = np.ones(self.dim)
-        scaled_sigma_starting_point = 0.1*np.ones(self.dim) #If we make this large then the estimation of gradient is very bad
-        starting_point = np.concatenate([mean_starting_point, scaled_sigma_starting_point])
-        results = minimize(self.function_wrapper, starting_point, jac=True, method=method, options=options)
-        return results
+    def set_initial_val(self, initial_val:np.ndarray):
+        assert len(initial_val) == 2*self.dim, 'Incorrect length of initial values, it should be equal to 2*dim'
+        self.initial_val = torch.tensor(initial_val, requires_grad=True)
+        self.parameters = [self.initial_val] # TODO: transfer it to objective. This does not make sense in optimizer
+
+    def create_optimizer(self, name_optimizer:str, **optimizer_parameters:dict):
+        name_optimizer = name_optimizer.lower()
+        if name_optimizer == 'adam':
+            self.optimizer = torch.optim.Adam(self.parameters, **optimizer_parameters)
+        elif name_optimizer == 'adadelta':
+            self.optimizer = torch.optim.Adadelta(self.parameters, **optimizer_parameters)
+        elif name_optimizer == 'adagrad':
+            self.optimizer = torch.optim.Adagrad(self.parameters, **optimizer_parameters)
+        elif name_optimizer == 'adamw':
+            self.optimizer = torch.optim.AdamW(self.parameters, **optimizer_parameters)
+        elif name_optimizer == 'adamax':
+            self.optimizer = torch.optim.Adamax(self.parameters, **optimizer_parameters)
+        elif name_optimizer == 'asgd':
+            self.optimizer = torch.optim.ASGD(self.parameters, **optimizer_parameters)
+        elif name_optimizer == 'nadam':
+            self.optimizer = torch.optim.NAdam(self.parameters, **optimizer_parameters)
+        elif name_optimizer == 'radam':
+            self.optimizer = torch.optim.RAdam(self.parameters, **optimizer_parameters)
+        elif name_optimizer == 'rmsprop':
+            self.optimizer = torch.optim.RMSprop(self.parameters, **optimizer_parameters)
+        elif name_optimizer == 'rprop':
+            self.optimizer = torch.optim.Rprop(self.parameters, **optimizer_parameters)
+        elif name_optimizer == 'SGD':
+            self.optimizer = torch.optim.SGD(self.parameters, **optimizer_parameters)
+        else:
+            raise NotImplementedError('Either the name of optimizer is wrong or it is not yet implemented in the code')
+
+    def optimize_fixed_lambda(self, log_lambdas:np.ndarray, num_steps_per_lambda:int):
+        self.objective.update_lambdas(log_lambdas)
+        for i in range(num_steps_per_lambda):
+            val, grad = obj.function_wrapper(self.parameters[0])
+            self.parameters[0].grad = torch.tensor(grad) # Tis could be problemtic in GPUs when device is not set correctly
+            self.optimizer.step()
+            self.stored_results.append(self.parameters[0])
+
+    def optimize_with_constraints(self, initial_log_lambdas:int=-1, num_lambdas:int=4, num_steps_per_lambda:int=100):
+        if self.optimizer is None:
+            print('Optimizer is not created, reverting to default Adam optimizer with lr 1e-2')
+            self.optimizer = torch.optim.Adam(self.parameters[0], lr=1e-2)
+        lambdas = initial_log_lambdas*np.ones(self.objective.num_constraints) 
+        for i in range(num_lambdas):
+            self.optimize_fixed_lambda(lambdas, num_steps_per_lambda)
+            print(self.objective.lambdas, self.get_final_state())
+            lambdas = lambdas + 1
     
-    #TODO: Make this private
-    def update_function_list(self, lambdas, constraints):
-        self.f_list = [self.func]
-        for idx, constraint in enumerate(constraints):
-            self.f_list.append(lambda x: lambdas[idx]*np.max([np.zeros(len(x)), constraint(x)], axis=0))
-
-    def optimize_with_constraints(self, constraints, maxiter=50, method='BFGS'):
-        options = {'maxiter':maxiter}
-        mean_starting_point = np.ones(self.dim)
-        num_constraints = len(constraints)
-        c = np.zeros(num_constraints) - 2
-        scaled_sigma_starting_point = np.zeros(self.dim) #If we make this large then the estimation of gradient is very bad
-        # TODO: Following process of changing lambda is not good. Maybe simply increase lambda
-        for i in range(5):
-            lambdas = 10**c
-            self.update_function_list(lambdas, constraints)
-            if i==0:
-                starting_point = np.concatenate([mean_starting_point, scaled_sigma_starting_point])
-            else:
-                starting_point = results.x
-            results = minimize(self.function_wrapper, starting_point, jac=True, method=method, options=options)
-            c = c + 1
-            print('Updated optimum point and c after ', i, ' optimization ', results.x, c)
-            print('Gradient at optimum', self.function_wrapper(results.x))
-            # print('penalty', self.penalty(results.x, lambdas, constraints))
-        return results
-
+    def get_final_state(self):
+        return {'mean':self.stored_results[-1][:self.dim], 'variance':self.stored_results[-1][self.dim:]}
+    
 
 def sphere(x):
-    val1 = np.sum(x**2, axis=1)
-    val2 = np.random.normal(0, 0.0001, val1.shape)
-    # val2 = 0
+    X = np.atleast_2d(x)
+    val1 = np.sum(X**2, axis=1)
+    # val2 = np.random.normal(0, 0.0001, val1.shape)
+    val2 = 0
     return val1 + val2
 
-# TODO: try other benchmarks
 
 def linear_constraint(X):
     x = np.atleast_2d(X)
     return 1 - x[:, 0] - x[:, 1]
 
 if __name__ == '__main__':
-    so = Stochastic_Optimizer(5, sphere)
+    dim = 10
     constraints = [linear_constraint]
-    # num_constraints = len(constraints)
-    # c = np.zeros(num_constraints)
-    # lambdas = 10**c
-    # so.update_function_list(lambdas, constraints)
-    # x = np.ones(4) * -2
-    # x[0] = 0.5
-    # x[1] = 0.5
-    # print(so.function_wrapper(x))
-    results = so.optimize_with_constraints(constraints)
-    print('Final result', results.x)
+    obj = SFBiasedBaseline(dim, sphere, constraints, num_samples=128)
+    optimizer = Stochastic_Optimizer(obj)
+    optimizer.create_optimizer('Adam', lr=1e-2)
+    optimizer.optimize_with_constraints(num_lambdas=6)
