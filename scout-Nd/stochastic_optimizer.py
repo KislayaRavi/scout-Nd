@@ -5,12 +5,20 @@ from objective_function import *
 import matplotlib.pyplot as plt
 seed = 0
 
-# TODO: Make an abstract class. Then create abstract function to incorporate multi-fidelity
-# TODO: Perform profiling, optimize the code for the most time-consuming part
 
-class Stochastic_Optimizer(object):
+class Stochastic_Optimizer():
+    """Class that encapsulates all the optimization parameters.
+
+    """
 
     def __init__(self, objective: ObjectiveAbstract, **kwargs:dict):
+        """Initializer
+        
+        Parameters
+        ----------
+        objective : ObjectiveAbstract
+            Object of type ObjectiveAbstract that contains all the information about the function and constraints.
+        """
         self.objective = objective
         self.dim = self.objective.dim
         if 'initial_val' in kwargs.keys():
@@ -23,6 +31,13 @@ class Stochastic_Optimizer(object):
         self.optimizer = None
 
     def set_initial_val(self, initial_val:np.ndarray):
+        """_summary_
+
+        Parameters
+        ----------
+        initial_val : np.ndarray
+            Starting point of the optimization algorithm.
+        """
         assert len(initial_val) == 2*self.dim, 'Incorrect length of initial values, it should be equal to 2*dim'
         self.initial_val = torch.tensor(initial_val, requires_grad=True)
         self.parameters = [self.initial_val] # TODO: transfer it to objective. This does not make sense in optimizer
@@ -55,6 +70,15 @@ class Stochastic_Optimizer(object):
             raise NotImplementedError('Either the name of optimizer is wrong or it is not yet implemented in the code')
 
     def optimize_fixed_lambda(self, log_lambdas:np.ndarray, num_steps_per_lambda:int):
+        """Performs optimization for fix value of lambdas for the given number of steps.
+
+        Parameters
+        ----------
+        log_lambdas : np.ndarray
+            The exponential logarithm of the penalty scaling factor.
+        num_steps_per_lambda : int
+            Number of optimization steps with fixed value of lambdas.
+        """
         self.objective.update_lambdas(log_lambdas)
         for i in range(num_steps_per_lambda):
             val, grad = obj.function_wrapper(self.parameters[0])
@@ -62,7 +86,18 @@ class Stochastic_Optimizer(object):
             self.optimizer.step()
             self.stored_results.append(self.parameters[0])
 
-    def optimize_with_constraints(self, initial_log_lambdas:int=-1, num_lambdas:int=4, num_steps_per_lambda:int=100):
+    def constrained_optimization(self, initial_log_lambdas:int=-1, num_lambdas:int=4, num_steps_per_lambda:int=100):
+        """Function that performs constrained optimization.
+
+        Parameters
+        ----------
+        initial_log_lambdas : int, optional
+            starting values of exponential logarithm of lambda, by default -1
+        num_lambdas : int, optional
+            Number of lambda updates, by default 4
+        num_steps_per_lambda : int, optional
+            Number of optimization steps with fixed value of lambdas., by default 100
+        """
         if self.optimizer is None:
             print('Optimizer is not created, reverting to default Adam optimizer with lr 1e-2')
             self.optimizer = torch.optim.Adam(self.parameters[0], lr=1e-2)
@@ -71,8 +106,37 @@ class Stochastic_Optimizer(object):
             self.optimize_fixed_lambda(lambdas, num_steps_per_lambda)
             print(self.objective.lambdas, self.get_final_state())
             lambdas = lambdas + 1
+
+    def unconstrained_optimization(self, num_steps: int=100):
+        """Function that performs unconstrained optimization.
+
+        Parameters
+        ----------
+        num_steps : int, optional
+            number of optimization steps, by default 100
+        """
+        for i in range(num_steps):
+            val, grad = obj.function_wrapper(self.parameters[0])
+            self.parameters[0].grad = torch.tensor(grad) # Tis could be problemtic in GPUs when device is not set correctly
+            self.optimizer.step()
+            self.stored_results.append(self.parameters[0])
+    
+    def optimize(self, **kwargs):
+        """Function to optmize the objective function
+        """
+        if self.objective.num_constraints > 0:
+            self.constrained_optimization(**kwargs)
+        else:
+            self.unconstrained_optimization(**kwargs)
     
     def get_final_state(self):
+        """Reurns the finals optimization results.
+
+        Returns
+        -------
+        dict
+            Dictionary of optimum mean and variance.
+        """
         return {'mean':self.stored_results[-1][:self.dim], 'variance':self.stored_results[-1][self.dim:]}
     
 
@@ -83,7 +147,6 @@ def sphere(x):
     val2 = 0
     return val1 + val2
 
-
 def linear_constraint(X):
     x = np.atleast_2d(X)
     return 1 - x[:, 0] - x[:, 1]
@@ -91,7 +154,9 @@ def linear_constraint(X):
 if __name__ == '__main__':
     dim = 10
     constraints = [linear_constraint]
-    obj = SFBiasedBaseline(dim, sphere, constraints, num_samples=128)
+    # constraints = None
+    obj = Baseline1(dim, sphere, constraints, num_samples=128)
     optimizer = Stochastic_Optimizer(obj)
     optimizer.create_optimizer('Adam', lr=1e-2)
-    optimizer.optimize_with_constraints(num_lambdas=6)
+    optimizer.optimize()
+    print(optimizer.get_final_state())
