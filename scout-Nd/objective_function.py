@@ -10,7 +10,8 @@ class ObjectiveAbstract(ABC):
 
     def __init__(self, dim: int, func: callable, constraints: list, 
                  distribution='gaussian', num_samples=128, qmc=True, 
-                 qmc_engine='Sobol', log_lambdas: np.ndarray=None):
+                 qmc_engine='Sobol', log_lambdas: np.ndarray=None,
+                 correct_constraint_derivative=True):
         """Constructor.
 
         Parameters
@@ -31,6 +32,8 @@ class ObjectiveAbstract(ABC):
             Name of the QMC sampling method, by default 'Sobol'.
         log_lambdas : np.ndarray, optional
             Exponential logarithm of the penalty coefficients, by default None.
+        correct_constraint_derivative : bool, optional
+            If constrained is satisfied then set the derivative of the w.r.t $\mu$ to zero, by default True. 
         """
         self.dim, self.func, self.distribution = dim, func, distribution
         self.constraints = constraints
@@ -40,6 +43,7 @@ class ObjectiveAbstract(ABC):
             self.num_constraints = len(constraints)
         self.num_samples = num_samples
         self.qmc, self.qmc_engine = qmc, qmc_engine 
+        self.correct_constraint_derivative = correct_constraint_derivative
         if self.num_constraints > 0:
             self.update_lambdas(log_lambdas)
 
@@ -65,11 +69,11 @@ class ObjectiveAbstract(ABC):
         np.ndarray
             Estimated gradient of the objective evaluation at mean
         """
+        mean_val, grad = self.estimator_mean_and_derivative(constraint, mean, samples, grad_logpdf_val)
         c_val = constraint(mean)
-        if c_val <= 0:
-            return 0, np.zeros(2*self.dim)
-        else:
-            return self.estimator_mean_and_derivative(constraint, mean, samples, grad_logpdf_val)
+        if c_val <= 0 and self.correct_constraint_derivative:
+            mean_val, grad[:self.dim] = 0, np.zeros(self.dim)
+        return mean_val, grad
 
     def stochastic_penalty_definition(self, constraint: callable, mean: float, 
                                        samples: np.ndarray, grad_logpdf_val: np.ndarray): 
