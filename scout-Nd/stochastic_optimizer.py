@@ -1,5 +1,4 @@
 import numpy as np
-from scipy.optimize import  minimize
 import torch
 from objective_function import *
 import matplotlib.pyplot as plt
@@ -81,7 +80,7 @@ class Stochastic_Optimizer():
         """
         self.objective.update_lambdas(log_lambdas)
         for i in range(num_steps_per_lambda):
-            val, grad = obj.function_wrapper(self.parameters[0])
+            val, grad = self.objective.function_wrapper(self.parameters[0])
             self.parameters[0].grad = torch.tensor(grad) # Tis could be problemtic in GPUs when device is not set correctly
             self.optimizer.step()
             self.stored_results.append(self.parameters[0])
@@ -116,7 +115,7 @@ class Stochastic_Optimizer():
             number of optimization steps, by default 100
         """
         for i in range(num_steps):
-            val, grad = obj.function_wrapper(self.parameters[0])
+            val, grad = self.objective.function_wrapper(self.parameters[0])
             self.parameters[0].grad = torch.tensor(grad) # Tis could be problemtic in GPUs when device is not set correctly
             self.optimizer.step()
             self.stored_results.append(self.parameters[0])
@@ -152,10 +151,10 @@ def linear_constraint(X):
     return 1 - x[:, 0] - x[:, 1]
 
 if __name__ == '__main__':
-    dim = 10
+    dim = 16
     constraints = [linear_constraint]
     # constraints = None
-    obj = Baseline1(dim, sphere, constraints, num_samples=128)
+    obj = Baseline1(dim, sphere, constraints, num_samples=32, qmc=False, correct_constraint_derivative=True)
     optimizer = Stochastic_Optimizer(obj)
     optimizer.create_optimizer('Adam', lr=1e-2)
     optimizer.optimize()
