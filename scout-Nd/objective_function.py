@@ -36,16 +36,32 @@ class ObjectiveAbstract(ABC):
             If constrained is satisfied then set the derivative of the w.r.t $\mu$ to zero, by default True. 
         """
         self.dim, self.func, self.distribution = dim, func, distribution
-        self.constraints = constraints
+        self.constraints = []
         if constraints is None:
             self.num_constraints = 0
         else:
             self.num_constraints = len(constraints)
+            self.create_constraints_list(constraints)
         self.num_samples = num_samples
         self.qmc, self.qmc_engine = qmc, qmc_engine 
         self.correct_constraint_derivative = correct_constraint_derivative
         if self.num_constraints > 0:
             self.update_lambdas(log_lambdas)
+
+    def create_constraints_list(self, constraints: list) -> None:
+        """Create the attribute of list of constraints for the class.
+
+        Parameters
+        ----------
+        constraints : list
+            List of callables representing the left-hand-side of less than equal to inequality constraint.
+        """
+        for i in range(self.num_constraints):
+            def constraint_wrapper(x):
+                y = constraints[i](x)
+                y[y<0] = 0
+                return y
+            self.constraints.append(constraint_wrapper)
 
     def deterministic_penalty_definition(self, constraint: callable, mean: float, 
                                          samples: np.ndarray, grad_logpdf_val: np.ndarray):
@@ -72,7 +88,8 @@ class ObjectiveAbstract(ABC):
         mean_val, grad = self.estimator_mean_and_derivative(constraint, mean, samples, grad_logpdf_val)
         c_val = constraint(mean)
         if c_val <= 0 and self.correct_constraint_derivative:
-            mean_val, grad[:self.dim] = 0, np.zeros(self.dim)
+            mean_val = 0
+            grad[:self.dim] = np.zeros(self.dim)
         return mean_val, grad
 
     def stochastic_penalty_definition(self, constraint: callable, mean: float, 
@@ -97,11 +114,11 @@ class ObjectiveAbstract(ABC):
         np.ndarray
             Estimated gradient of the objective evaluation at mean
         """
-        # usage this when constraint is stochastic (not yet used in the code)
-        mean_constraint, grad_constraint = self.estimator_mean_and_derivative(constraint, mean, samples, grad_logpdf_val)
-        if mean_constraint <= 0:
-            return 0, np.zeros(2*self.dim)
-        return mean_constraint, grad_constraint
+        # use this when constraint is stochastic (not yet used in the code)
+        # Correction of derivative in stochastic case is complicated.
+        # We need to define a robustness measure.
+        mean_val, grad = self.estimator_mean_and_derivative(constraint, mean, samples, grad_logpdf_val)
+        return mean_val, grad
     
     def get_penalty(self, mean: float, samples: np.ndarray, grad_logpdf_val: np.ndarray):
         """Accumulates penalty from all the constraints, multiplies it with lambdas and returns the total penalty and its gradient. 
@@ -122,11 +139,10 @@ class ObjectiveAbstract(ABC):
         np.ndarray
             Estimated gradient of the objective evaluation at mean
         """
-        if self.constraints is None:
+        if self.num_constraints == 0:
             return 0, 0
         else:
-            num_constraints = len(self.constraints)
-            mean_array, grad_array = np.zeros(num_constraints), np.zeros((num_constraints, 2*self.dim))
+            mean_array, grad_array = np.zeros(self.num_constraints), np.zeros((self.num_constraints, 2*self.dim))
             for idx, constraint in enumerate(self.constraints):
                 mean_array[idx], grad_array[idx, :] = self.deterministic_penalty_definition(constraint, mean, samples, grad_logpdf_val)
             return np.sum(self.lambdas*mean_array), np.sum(self.lambdas[:,None]*grad_array, axis=0)

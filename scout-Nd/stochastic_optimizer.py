@@ -151,10 +151,10 @@ def linear_constraint(X):
     return 1 - x[:, 0] - x[:, 1]
 
 if __name__ == '__main__':
-    dim = 16
+    dim = 32
     constraints = [linear_constraint]
     # constraints = None
-    obj = Baseline1(dim, sphere, constraints, num_samples=32, qmc=False, correct_constraint_derivative=True)
+    obj = Baseline1(dim, sphere, constraints, num_samples=16, qmc=True, correct_constraint_derivative=True)
     optimizer = Stochastic_Optimizer(obj)
     optimizer.create_optimizer('Adam', lr=1e-2)
     optimizer.optimize()
