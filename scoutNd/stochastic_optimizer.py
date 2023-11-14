@@ -135,8 +135,8 @@ class Stochastic_Optimizer():
 
         # check if FIM is invertible
         if np.linalg.cond(fim) > 1/sys.float_info.epsilon:
-            raise ValueError('Fisher information matrix is not invertible')
-        return np.diag(fisher_diag)
+            raise ValueError(f'Fisher information matrix is not invertible, it is: {fim}')
+        return fim
 
     def constrained_optimization(self, initial_log_lambdas:int=-1, num_lambdas:int=4, num_steps_per_lambda:int=100):
         """Function that performs constrained optimization.
@@ -169,6 +169,8 @@ class Stochastic_Optimizer():
         """
         for i in range(num_steps):
             val, grad = self.objective.function_wrapper(self.parameters[0])
+            if self.natural_gradients:
+                grad = self._get_fim_adjusted_gradient(self.parameters[0][self.dim:].detach().numpy(), grad)
             self.parameters[0].grad = torch.tensor(grad) # Tis could be problemtic in GPUs when device is not set correctly
             self.optimizer.step()
             self.stored_results.append(deepcopy(self.parameters[0]))

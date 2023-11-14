@@ -116,20 +116,22 @@ if gaussian_conv:
         #plt.show()
     
     
-if optimize_compare:
+#if optimize_compare:
+def compare_optimize(sigma,mean_init :int,plot_name:str,**kwargs):
     constraints = None
     # constraints = None
     obj = Baseline1(dim, function, constraints, num_samples=64, qmc=True, correct_constraint_derivative=True)
     
-    x0 = 3*np.ones(2*dim)
-    sigma = -10
+    #x0 = 3*np.ones(2*dim)
+    x0 = mean_init*np.ones(2*dim)
+    #sigma = -10
     x0[dim:] = sigma
     #x0[dim:] = sigma
     #x0 = np.zeros(2*dim)
-    optimizer = Stochastic_Optimizer(obj, initial_val=x0)
+    optimizer = Stochastic_Optimizer(obj, initial_val=x0, **kwargs)
     #optimizer.set_initial_val(x0)
     optimizer.create_optimizer('Adam', lr=1e-1)
-    num_steps = 1000
+    num_steps = 500
     optimizer.optimize(num_steps=num_steps)
     mean_evo = np.zeros((num_steps, dim))
     var_evo = np.zeros((num_steps, dim))
@@ -166,7 +168,7 @@ if optimize_compare:
     # add colorbar
     cbar = plt.colorbar(h, ax=ax)
     plt.tight_layout()
-    plt.savefig('ackley_optimization_mean_evolution_contour_' + f'sigma_{sigma}'+'.pdf')
+    plt.savefig(f'figures/ackley_optimization_mean_evolution_contour_{plot_name}' + f'sigma_{sigma}'+'.pdf')
     plt.show()
 
     # plot mean evolution
@@ -180,7 +182,7 @@ if optimize_compare:
     ax.legend()
     ax.grid()
     plt.tight_layout()  
-    plt.savefig('ackley_optimization_mean_evolution_' + f'sigma_{sigma}'+'.pdf')
+    plt.savefig(f'figures/ackley_optimization_mean_evolution_{plot_name}' + f'sigma_{sigma}'+'.pdf')
     plt.show()
 
     # plot var evolution
@@ -194,10 +196,13 @@ if optimize_compare:
     ax.legend()
     ax.grid()
     plt.tight_layout()  
-    plt.savefig('ackley_optimization_var_evolution_' + f'sigma_{sigma}'+'.pdf')
+    plt.savefig(f'figures/ackley_optimization_var_evolution_{plot_name}' + f'sigma_{sigma}'+'.pdf')
     plt.show()
 
 if check_fim:
+    compare_optimize(sigma=0,mean_init=0.1,plot_name = 'fim_true_start_0dot1_',natural_gradients=True)
+    #compare_optimize(sigma=0,mean_init=0.1,plot_name = 'fim_false_start_0dot1_',natural_gradients=False)
+
 
 
     

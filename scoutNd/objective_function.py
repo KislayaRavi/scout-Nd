@@ -180,7 +180,7 @@ class ObjectiveAbstract(ABC):
         """
         m = torch.tensor(mean, requires_grad=True)
         ss = torch.tensor(scaled_sigma, requires_grad=True)
-        dist = torch.distributions.MultivariateNormal(m, torch.diag(torch.exp(ss)))
+        dist = torch.distributions.MultivariateNormal(m, torch.diag(torch.exp(ss)**2))
         val = dist.log_prob(torch.tensor(sample))
         val.backward()
         grad_mean, grad_sigma = m.grad, ss.grad
@@ -232,7 +232,7 @@ class ObjectiveAbstract(ABC):
             if self.dim == 1:
                 samples = np.random.normal(mean, np.exp(scaled_sigma), size=(self.num_samples, self.dim))
             else:
-                samples = np.random.multivariate_normal(mean, np.diag(np.exp(scaled_sigma)), size=(self.num_samples,))
+                samples = np.random.multivariate_normal(mean, np.diag(np.exp(scaled_sigma)**2), size=(self.num_samples,))
         return samples
 
     def function_wrapper(self, x:np.ndarray):
