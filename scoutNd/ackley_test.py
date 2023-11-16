@@ -9,7 +9,7 @@ from itertools import product
 
 from stochastic_optimizer import Stochastic_Optimizer
 from objective_function import Baseline1
-rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
+rc('font',**{'family':'sans-serif','sans-serif':['Arial']})
 ## for Palatino and other serif fonts use:
 #rc('font',**{'family':'serif','serif':['Palatino']})
 rc('text', usetex=True)
@@ -30,6 +30,13 @@ rc('figure', titlesize=MEDIUM_SIZE)  # fontsize of the figure titles
 # print(function.get_name())
 # function.evaluate_hf(np.array([0,0]))
 # fig = function.plot()
+# double precision for both numpy and tensor
+torch.set_default_dtype(torch.float64)
+# fix the seed
+seed = 666
+np.random.seed(seed)
+torch.random.manual_seed(seed)
+
 
 dim = 2
 def function(x:np.array):
@@ -46,6 +53,7 @@ optimize= False
 gaussian_conv = False
 optimize_compare = False
 check_fim = True
+compare_fim_fx = False
 
 if optimize == True:
     constraints = None
@@ -117,10 +125,10 @@ if gaussian_conv:
     
     
 #if optimize_compare:
-def compare_optimize(sigma,mean_init :int,plot_name:str,**kwargs):
+def compare_optimize(sigma,mean_init :int,plot_name:str,no_sample=64,**kwargs):
     constraints = None
     # constraints = None
-    obj = Baseline1(dim, function, constraints, num_samples=64, qmc=True, correct_constraint_derivative=True)
+    obj = Baseline1(dim, function, constraints, num_samples=no_sample, qmc=True, correct_constraint_derivative=True)
     
     #x0 = 3*np.ones(2*dim)
     x0 = mean_init*np.ones(2*dim)
@@ -139,6 +147,25 @@ def compare_optimize(sigma,mean_init :int,plot_name:str,**kwargs):
     for i in range(num_steps):
         mean_evo[i,:] = optimizer.stored_results[i].detach().numpy()[:dim]
         var_evo[i,:] = np.exp(optimizer.stored_results[i].detach().numpy()[dim:])
+    
+    # plotting no of fn evalutions vs the f(x)
+    val = np.array(optimizer.stored_f_x)
+    # convert the list to an array
+    # plot var evolution
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    no_calls = np.linspace(0, no_sample*num_steps, num_steps)
+    ax.semilogy(no_calls,val, label=r'$\sigma_1^2$')
+    #ax.semilogy(var_evo[1:,1],'b', label=r'$\sigma_2^2$')
+    ax.set_xlabel(r'$iterations$')
+    ax.set_ylabel(r'$\sigma^2$')
+    ax.legend()
+    ax.grid()
+    plt.tight_layout()  
+    plt.savefig(f'figures/ackley_optimization_var_evolution_{plot_name}' + f'sigma_{sigma}'+'.pdf')
+    plt.show()
+
+
 
     # do a 2d contour plot for the Ackley fn
     
@@ -199,16 +226,110 @@ def compare_optimize(sigma,mean_init :int,plot_name:str,**kwargs):
     plt.savefig(f'figures/ackley_optimization_var_evolution_{plot_name}' + f'sigma_{sigma}'+'.pdf')
     plt.show()
 
+def compare_natural_fn_vals(sigma,mean_init :int,plot_name:str,no_sample=64,plotting=True,**kwargs):
+    constraints = None
+    # constraints = None
+    obj = Baseline1(dim, function, constraints, num_samples=no_sample, qmc=True, correct_constraint_derivative=True)
+    
+    #x0 = 3*np.ones(2*dim)
+    x0 = mean_init*np.ones(2*dim)
+    #sigma = -10
+    x0[dim:] = sigma
+    #x0[dim:] = sigma
+    #x0 = np.zeros(2*dim)
+    optimizer = Stochastic_Optimizer(obj, initial_val=x0, natural_gradients=True, **kwargs)
+    #optimizer.set_initial_val(x0)
+    lr = 0.1
+    optimizer.create_optimizer('Adam', lr=lr)
+    #num_steps = 300
+    num_steps = 1000
+    optimizer.optimize(num_steps=num_steps)
+    
+    
+    val_nat_grad = np.array(optimizer.stored_f_x)
+
+    # natural grad flase
+    optimizer_ = Stochastic_Optimizer(obj, initial_val=x0, natural_gradients=False,**kwargs)
+    #optimizer.set_initial_val(x0)
+    optimizer_.create_optimizer('Adam', lr=lr)
+    
+    optimizer_.optimize(num_steps=num_steps)
+
+    val_no_nat_grad = np.array(optimizer_.stored_f_x)
+
+    # plotting no of fn evalutions vs the f(x)
+    if plotting:
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        no_calls = np.linspace(0, no_sample*num_steps, num_steps)
+        #ax.semilogy(no_calls,val_no_nat_grad, label=r'Scout')
+        #ax.semilogy(no_calls,val_nat_grad, label=r'Scount NG')
+        ax.plot(no_calls,val_no_nat_grad, label=r'Scout')
+        ax.plot(no_calls,val_nat_grad, label=r'Scount NG')
+        # horizontal line with grey dotted at y =0 
+        ax.axhline(y=0, color='grey', linestyle='--', label=r'True value')
+        #ax.semilogy(var_evo[1:,1],'b', label=r'$\sigma_2^2$')
+        ax.set_xlabel('Number of function calls', fontsize=15)
+        ax.set_ylabel(r'$f(x)$')
+        ax.legend()
+        ax.grid()
+        plt.tight_layout()  
+        plt.savefig(f'figures/ackley_optimization_f_x_lr_{lr}_{plot_name}' + f'sigma_{sigma}'+'.pdf')
+        plt.show()
+    return val_nat_grad, val_no_nat_grad
+
 if check_fim:
     compare_optimize(sigma=0,mean_init=0.1,plot_name = 'fim_true_start_0dot1_',natural_gradients=True)
     #compare_optimize(sigma=0,mean_init=0.1,plot_name = 'fim_false_start_0dot1_',natural_gradients=False)
 
+if compare_fim_fx:
+    #compare_natural_fn_vals(sigma=0,mean_init=5,no_sample=64,plot_name = 'fim_comparision')
+    no_samples = [2,4,8,16,32,64]
+    #no_samples = [2,2]
+    no_ng =[]
+    ng = []
+    for i in no_samples:
+        val_nat_grad, val_no_nat_grad = compare_natural_fn_vals(sigma=0,mean_init=5,no_sample=i,plot_name = 'fim_comparision', plotting=False)
+        no_ng.append(val_no_nat_grad)
+        ng.append(val_nat_grad)
+    no_ng = np.vstack(no_ng)
+    ng = np.vstack(ng)
+    fig = plt.figure(figsize=(9,6))
+    ax = fig.add_subplot(111)
+    no_step = 1000
+    CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
+                  '#f781bf', '#a65628', '#984ea3',
+                  '#999999', '#e41a1c', '#dede00']
+    for i in range(len(no_samples)):
+        # linspace for no of space
+        iterations = np.linspace(0, no_step, no_step)
+        ax.plot(iterations,no_ng[i,:], ':',color=CB_color_cycle[i], label=f'no NG $(S = {no_samples[i]})$')
+        ax.plot(iterations,ng[i,:], '-',color=CB_color_cycle[i], label=f'NG $(S = {no_samples[i]})$')
+    # horizontal line with grey dotted at y =0
+    ax.axhline(y=0, color='grey', linestyle='--', label=r'True value')
+    ax.set_xlabel('Number of steps', fontsize=15)
+    ax.set_ylabel(r'$f(x)$')
+    # plot the legend outside the plot on the right side, the main plot should be square
+    ax.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0.)
+    # th plot x and y should be equal
 
+    #ax.legend(bbox_to_anchor=(-0.1, 1.05), loc='lower left', borderaxespad=0., ncols=5)
+    #ax.legend()
+    ax.grid()
+    plt.tight_layout()
+    plt.savefig(f'figures/ackley_optimization_f_x_lr_fim_comparision_different_samples'+'.pdf')
+    
 
     
 
 
-
+# 1. what dampoening factor to choose.
+# 2. very large terms in the diagonal.
+# 3. what should be the value of the coeff. 
+# 4. turn off the natural gradeints for starting 40% of the iterations? 
+# - use sigma stopping criterion. no need to push for cond number bettwe
+# - exp decay for nat grad, or delayed start (based on moving avergae of the fn lets say)
+# - Multi level MC, check the var reduction for it. gil thesis eq 73-76
         #print(optimizer.get_final_state())
 
 

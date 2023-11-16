@@ -28,8 +28,10 @@ class Stochastic_Optimizer():
             x0 = np.ones(2*self.dim)
             x0[self.dim:] = -1
             self.set_initial_val(x0)
-        self.stored_results = [self.initial_val]        
+        self.stored_results = [self.initial_val] # stores evolution of thetas
+        self.stored_f_x = [] # stores evolution of f(x) 
         self.optimizer = None
+        self.iteration = 0
         if 'natural_gradients' in kwargs.keys():
             self.natural_gradients = kwargs['natural_gradients']
         else:
@@ -91,7 +93,9 @@ class Stochastic_Optimizer():
                 grad = self._get_fim_adjusted_gradient(self.parameters[0][self.dim:].detach().numpy(), grad)
             self.parameters[0].grad = torch.tensor(grad) # Tis could be problemtic in GPUs when device is not set correctly
             self.optimizer.step()
-            self.stored_results.append(deepcopy(self.parameters[0]))
+            self.stored_results.append(deepcopy(self.parameters[0])) # storing thetas
+            self.stored_f_x.append(val) # storing f(x) values
+            self.iteration = i
     
     def _get_fim_adjusted_gradient(self, phi:np.ndarray, grad:np.ndarray):
         """Computes the adjusted gradient using the Fisher information matrix.
@@ -111,8 +115,13 @@ class Stochastic_Optimizer():
         assert phi.shape == (self.dim,), 'Incorrect shape of phi'
         assert grad.shape == (2*self.dim,), 'Incorrect shape of grad'
         fim = self._fisher_information_matrix(phi)
-        #TODO add damped fim here
-        tilda_grad_U = np.linalg.solve(fim, grad)
+
+        # --- by preinverting the matrix
+        fim_inv = np.matrix(fim).I
+        tilda_grad_U = np.matmul(fim_inv, grad).base # to return an array instead of matrix
+
+        # --- by solving the linear system
+        #tilda_grad_U_ = np.linalg.solve(fim, grad)
         return tilda_grad_U
     
     def _fisher_information_matrix(self,phi):
@@ -133,9 +142,20 @@ class Stochastic_Optimizer():
         fisher_diag = np.hstack((tmp,2*np.ones(self.dim)))
         fim = np.diag(fisher_diag)
 
+        #TODO add damped fim here
+        fim_dampening_coeff = 1e-1
+        dampening_coeff_lower_bound = 1e-8
+        fim_decay_start = 50
+        if self.iteration > fim_decay_start:
+            tmp = fim_dampening_coeff*np.exp(-(self.iteration - fim_decay_start)/fim_decay_start)
+            dampening_coeff = max(tmp, dampening_coeff_lower_bound)
+        else:
+            dampening_coeff = fim_dampening_coeff
+        
+        fim = fim + dampening_coeff*np.eye(2*self.dim)
         # check if FIM is invertible
-        if np.linalg.cond(fim) > 1/sys.float_info.epsilon:
-            raise ValueError(f'Fisher information matrix is not invertible, it is: {fim}')
+        # if np.linalg.cond(fim) > 1/sys.float_info.epsilon:
+        #     raise ValueError(f'Fisher information matrix is not invertible, it is: {fim}')
         return fim
 
     def constrained_optimization(self, initial_log_lambdas:int=-1, num_lambdas:int=4, num_steps_per_lambda:int=100):
@@ -174,6 +194,12 @@ class Stochastic_Optimizer():
             self.parameters[0].grad = torch.tensor(grad) # Tis could be problemtic in GPUs when device is not set correctly
             self.optimizer.step()
             self.stored_results.append(deepcopy(self.parameters[0]))
+            self.stored_f_x.append(val) # storing f(x) values
+            self.iteration = i
+
+            # convergance criterion if (||sigma^2|| <-= 10^-06 break)
+            # if np.linalg.norm(np.exp(2*self.parameters[0][self.dim:].detach().numpy())) <= 1e-06:
+            #     break
     
     def optimize(self, **kwargs):
         """Function to optmize the objective function
