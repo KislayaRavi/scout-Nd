@@ -7,8 +7,8 @@ from matplotlib import pyplot as plt
 from matplotlib import rc
 from itertools import product
 
-from stochastic_optimizer import Stochastic_Optimizer
-from objective_function import Baseline1
+from scoutNd.stochastic_optimizer import Stochastic_Optimizer
+from scoutNd.objective_function import Baseline1
 rc('font',**{'family':'sans-serif','sans-serif':['Arial']})
 ## for Palatino and other serif fonts use:
 #rc('font',**{'family':'serif','serif':['Palatino']})
