@@ -1,5 +1,5 @@
 
-from benchmarks import AckleyFunction
+from scoutNd.benchmarks import AckleyFunction
 import numpy as np
 import torch
 import pickle

@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from objective_function import *
+from scoutNd.objective_function import *
 import matplotlib.pyplot as plt
 from copy import deepcopy
 import sys
@@ -235,7 +235,7 @@ if __name__ == '__main__':
     dim = 32
     constraints = [linear_constraint]
     # constraints = None
-    obj = Baseline1(dim, sphere, constraints, num_samples=16, qmc=True, correct_constraint_derivative=True)
+    obj = Baseline1(dim, sphere, constraints, num_samples=32, qmc=True, correct_constraint_derivative=True)
     optimizer = Stochastic_Optimizer(obj)
     optimizer.create_optimizer('Adam', lr=1e-2)
     optimizer.optimize()
