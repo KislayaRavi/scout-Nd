@@ -1,6 +1,6 @@
 import numpy as np
-from objective_function import *
-from stochastic_optimizer import *
+from scoutNd.objective_function import *
+from scoutNd.stochastic_optimizer import *
 
 
 class MultifidelityObjective():

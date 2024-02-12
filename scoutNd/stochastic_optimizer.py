@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from objective_function import *
+from scoutNd.objective_function import *
 import matplotlib.pyplot as plt
 from copy import deepcopy
 import sys
@@ -29,13 +29,26 @@ class Stochastic_Optimizer():
             x0[self.dim:] = -1
             self.set_initial_val(x0)
         self.stored_results = [self.initial_val] # stores evolution of thetas
-        self.stored_f_x = [] # stores evolution of f(x) 
+        self.stored_f_x = [] # stores evolution of f(x) i.e obj + lambda_i c_i(x)
+        self.stored_objective_mean = []
+        self.stored_constraints_mean = []
         self.optimizer = None
         self.iteration = 0
         if 'natural_gradients' in kwargs.keys():
             self.natural_gradients = kwargs['natural_gradients']
+            print("Natural gradients are being used")
         else:
             self.natural_gradients = False
+            print("Natural gradients are not being used")
+        if 'verbose' in kwargs.keys():
+            self.verbose = kwargs['verbose']
+            if self.verbose:
+                print("Verbose mode is on.")
+        else:
+            self.verbose = False
+            print("Verbose mode is off.")
+        
+
 
     def set_initial_val(self, initial_val:np.ndarray):
         """_summary_
@@ -78,6 +91,7 @@ class Stochastic_Optimizer():
 
     def optimize_fixed_lambda(self, log_lambdas:np.ndarray, num_steps_per_lambda:int):
         """Performs optimization for fix value of lambdas for the given number of steps.
+        Synchronous to the "unconstrained_optmization" function below. Changes made here should be replicated there.
 
         Parameters
         ----------
@@ -95,7 +109,17 @@ class Stochastic_Optimizer():
             self.optimizer.step()
             self.stored_results.append(deepcopy(self.parameters[0])) # storing thetas
             self.stored_f_x.append(val) # storing f(x) values
+            self.stored_objective_mean.append(self.objective.objective_value)
+            self.stored_constraints_mean.append(self.objective.constrain_values)
             self.iteration = i
+
+            # print the output
+            if self.verbose and i%10 == 0:
+                print(f'Iteration: {i}, lambdas: {self.objective.lambdas}, L(x): {val}, f(x): {self.objective.objective_value}, C(x) : {self.objective.constrain_values}, theta_mean : {self.stored_results[-1][:self.dim]}, theta_beta : {self.stored_results[-1][self.dim:]} ')
+
+            # TODO: add convergance criterion here
+
+                
     
     def _get_fim_adjusted_gradient(self, phi:np.ndarray, grad:np.ndarray):
         """Computes the adjusted gradient using the Fisher information matrix.
@@ -181,6 +205,7 @@ class Stochastic_Optimizer():
 
     def unconstrained_optimization(self, num_steps: int=100):
         """Function that performs unconstrained optimization.
+        Synchronous to the "get_fixed_lambda" function above. 
 
         Parameters
         ----------
@@ -193,9 +218,15 @@ class Stochastic_Optimizer():
                 grad = self._get_fim_adjusted_gradient(self.parameters[0][self.dim:].detach().numpy(), grad)
             self.parameters[0].grad = torch.tensor(grad) # Tis could be problemtic in GPUs when device is not set correctly
             self.optimizer.step()
+            # store numpy of parmeters in stored_results
             self.stored_results.append(deepcopy(self.parameters[0]))
             self.stored_f_x.append(val) # storing f(x) values
+            self.stored_constraints_mean.append(self.objective.objective_value)
             self.iteration = i
+
+            # print the output
+            if self.verbose and i%10 == 0:
+                print(f'Iteration: {i}, lambdas: {self.objective.lambdas}, L(x): {val}, f(x): {self.objective.objective_value}, theta_mean : {self.stored_results[-1][:self.dim]}, theta_beta : {self.stored_results[-1][self.dim:]} ')
 
             # convergance criterion if (||sigma^2|| <-= 10^-06 break)
             # if np.linalg.norm(np.exp(2*self.parameters[0][self.dim:].detach().numpy())) <= 1e-06:
@@ -218,6 +249,40 @@ class Stochastic_Optimizer():
             Dictionary of optimum mean and variance.
         """
         return {'mean':self.stored_results[-1][:self.dim], 'variance':self.stored_results[-1][self.dim:]}
+    
+    def get_objective_constraint_evolution(self):
+            """
+            Returns the evolution of the objective and constraint values.
+
+            Returns:
+                If there are constraints, returns a tuple containing the augmented objective mean,
+                objective mean, and constraints mean as numpy arrays.
+                If there are no constraints, returns a tuple containing the augmented objective mean
+                and objective mean as numpy arrays.
+            """
+           
+            aug_objective_mean = np.array(self.stored_f_x)
+            objective_mean = np.array(self.stored_objective_mean)
+
+            if self.objective.num_constraints > 0:
+                constraints_mean = np.array(self.stored_constraints_mean)
+                return aug_objective_mean, objective_mean, constraints_mean
+            else:
+                return aug_objective_mean, objective_mean
+        
+    def get_design_variable_evolution(self):
+            """
+            Returns the evolution of the design variables.
+
+            Returns:
+                x_mean (ndarray): The evolution of the mean design variables.
+                x_beta (ndarray): The evolution of the beta design variables.
+            """
+            # convert list of tensors in store_results to numpy array
+            des_variables = np.array([result.detach().numpy() for result in self.stored_results])
+            x_mean = des_variables[:, :self.dim]
+            x_beta = des_variables[:, self.dim:]
+            return x_mean, x_beta
     
 
 def sphere(x):
