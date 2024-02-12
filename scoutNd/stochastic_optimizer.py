@@ -111,11 +111,13 @@ class Stochastic_Optimizer():
             self.stored_f_x.append(val) # storing f(x) values
             self.stored_objective_mean.append(self.objective.objective_value)
             self.stored_constraints_mean.append(self.objective.constrain_values)
-            self.iteration = i
+            # keep adding the iteration number
+            self.iteration+=1 # FIM kicks in after a certain value of iteration.
+            #self.iteration = i
 
             # print the output
             if self.verbose and i%10 == 0:
-                print(f'Iteration: {i}, lambdas: {self.objective.lambdas}, L(x): {val}, f(x): {self.objective.objective_value}, C(x) : {self.objective.constrain_values}, theta_mean : {self.stored_results[-1][:self.dim]}, theta_beta : {self.stored_results[-1][self.dim:]} ')
+                print(f'Iteration: {self.iteration}, lambdas: {self.objective.lambdas}, L(x): {val}, f(x): {self.objective.objective_value}, C(x) : {self.objective.constrain_values}, theta_mean : {self.stored_results[-1][:self.dim]}, theta_beta : {self.stored_results[-1][self.dim:]} ')
 
             # TODO: add convergance criterion here
 
