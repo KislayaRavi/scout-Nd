@@ -37,6 +37,7 @@ class ObjectiveAbstract(ABC):
         """
         self.dim, self.func, self.distribution = dim, func, distribution
         self.constraints = []
+        #self.lambda_list = [] # storage for the lambda values
         if constraints is None:
             self.num_constraints = 0
         else:
@@ -49,6 +50,7 @@ class ObjectiveAbstract(ABC):
             self.update_lambdas(log_lambdas)
         self.constrain_values = None  # placeholder for constraint values, size : no_constraints x 1
         self.objective_value = None
+        
 
     def create_constraints_list(self, constraints: list) -> None:
         """Create the attribute of list of constraints for the class.
@@ -164,6 +166,7 @@ class ObjectiveAbstract(ABC):
         else:
             self.lambdas = np.exp(log_lambdas)
             assert len(self.lambdas) == len(self.constraints), 'Number of constraints should be equal to number of lambdas'
+        #self.lambda_list.append(self.lambdas)
     
     def grad_logpdf_one_sample(self, mean: np.ndarray, scaled_sigma: np.ndarray, sample: np.ndarray):
         """Evaluates the gradient of logarithm of the distribution with respect to the mean and the scaled sigma for a given sample.

@@ -1,10 +1,14 @@
 import numpy as np
 import torch
 from scoutNd.objective_function import *
+from scoutNd.viz import variable_evolution
 import matplotlib.pyplot as plt
 from copy import deepcopy
 import sys
-seed = 0
+import time
+datetime = time.strftime("%Y%m%d-%H%M%S")
+
+ #seed = 0
 
 
 class Stochastic_Optimizer():
@@ -14,6 +18,17 @@ class Stochastic_Optimizer():
 
     def __init__(self, objective: ObjectiveAbstract, **kwargs:dict):
         """Initializer
+        kwargs can take the following parameters:
+        - initial_val: np.ndarray
+            Starting point of the optimization algorithm.
+        - natural_gradients: bool
+            If True, natural gradients are used.
+        - verbose: bool
+            If True, the optimizer will print the output.
+        - tolerance_L_x: float
+            Tolerance of L(x) per lambda.
+        - tolerance_sigma: float
+            Tolerance of sigma^2.
         
         Parameters
         ----------
@@ -32,6 +47,7 @@ class Stochastic_Optimizer():
         self.stored_f_x = [] # stores evolution of f(x) i.e obj + lambda_i c_i(x)
         self.stored_objective_mean = []
         self.stored_constraints_mean = []
+        self.stored_lambdas = []
         self.optimizer = None
         self.iteration = 0
         if 'natural_gradients' in kwargs.keys():
@@ -47,8 +63,32 @@ class Stochastic_Optimizer():
         else:
             self.verbose = False
             print("Verbose mode is off.")
-        
 
+        # set tolerance for a given lambda 
+        # if 'tolerance_L_x' in kwargs.keys():
+        #     self.tolerance_L_x = kwargs['tolerance_L_x']
+        # else:
+        #     self.tolerance_L_x = 1e-04
+        #     print(f'L_2 norm Tolerance of L(x) per lambda is set to {self.tolerance_L_x}')
+        if 'tolerance_theta' in kwargs.keys():
+            self.tolerance_theta = kwargs['tolerance_theta']
+        else:
+            self.tolerance_theta = 1e-04
+            print(f'L_2 norm Tolerance of theta is set to {self.tolerance_theta}')
+        
+        # set tolerance for sigma^2
+        if 'tolerance_sigma' in kwargs.keys():
+            self.tolerance_sigma = kwargs['tolerance_sigma']
+        else:
+            self.tolerance_sigma = 5e-03
+            print(f'L_2 norm Tolerance of sigma^2 is set to {self.tolerance_sigma}')
+
+        # set tolerance for constraints
+        if 'tol_constraints' in kwargs.keys():
+            self.tol_constraints = kwargs['tol_constraints']
+        else:
+            self.tol_constraints = 1e-03
+            print(f'L_2 norm Tolerance of constraints is set to {self.tol_constraints}')
 
     def set_initial_val(self, initial_val:np.ndarray):
         """_summary_
@@ -90,7 +130,7 @@ class Stochastic_Optimizer():
             raise NotImplementedError('Either the name of optimizer is wrong or it is not yet implemented in the code')
 
     def optimize_fixed_lambda(self, log_lambdas:np.ndarray, num_steps_per_lambda:int):
-        """Performs optimization for fix value of lambdas for the given number of steps.
+        """Performs optimization for fix value of lambdas for the given number of steps. This is the inner loop of the optimization.
         Synchronous to the "unconstrained_optmization" function below. Changes made here should be replicated there.
 
         Parameters
@@ -100,6 +140,8 @@ class Stochastic_Optimizer():
         num_steps_per_lambda : int
             Number of optimization steps with fixed value of lambdas.
         """
+        theta_norm_convergance_criterion = False
+        condition_1 = False
         self.objective.update_lambdas(log_lambdas)
         for i in range(num_steps_per_lambda):
             val, grad = self.objective.function_wrapper(self.parameters[0])
@@ -111,15 +153,48 @@ class Stochastic_Optimizer():
             self.stored_f_x.append(val) # storing f(x) values
             self.stored_objective_mean.append(self.objective.objective_value)
             self.stored_constraints_mean.append(self.objective.constrain_values)
+            self.stored_lambdas.append(self.objective.lambdas)
             # keep adding the iteration number
             self.iteration+=1 # FIM kicks in after a certain value of iteration.
             #self.iteration = i
 
             # print the output
-            if self.verbose and i%10 == 0:
+            if self.verbose and i%25 == 0:
                 print(f'Iteration: {self.iteration}, lambdas: {self.objective.lambdas}, L(x): {val}, f(x): {self.objective.objective_value}, C(x) : {self.objective.constrain_values}, theta_mean : {self.stored_results[-1][:self.dim]}, theta_beta : {self.stored_results[-1][self.dim:]} ')
 
-            # TODO: add convergance criterion here
+            # convergance criterion here
+            # if ||f_x -f_x_prev|| < 1e-06 break
+            #if len(self.stored_f_x) > 1 and np.linalg.norm(val - self.stored_f_x[-2]) <= self.tolerance_L_x:
+
+            # break condition 1: 20 iterations have passed and each entry of the constraint is more than the tolearnce. meaning lambda is not able to decrease the constraint. this wouldnt be triggered when
+            # we start from constraint satisfaction region
+            if i > 20 and all(val > self.tol_constraints for val in self.stored_constraints_mean[-10:]):
+            #if self.iteration > 20 and np.linalg.norm(self.stored_constraints_mean[-5:]) > self.tol_constraints:
+                condition_1 = True
+                print(f"-------------------------------------------\n"
+                f"Inner loop termination criterion 1. The Lambda is not enough and needs to be increased. iteration number j: {i} for the lambda : {self.objective.lambdas}\n"
+                f"-------------------------------------------\n")
+                break
+                
+
+            # break condition 2: if || theta_i - theta_i-1|| < tol break
+            if len(self.stored_results) >2:
+                with torch.no_grad():
+                    # write RMSe with torch
+                    rmse = torch.sqrt(torch.mean(torch.square(self.stored_results[-1][:self.dim] - self.stored_results[-2][:self.dim]))) 
+                if rmse.item() <= self.tolerance_theta:
+                    # print(f"----------------------------------------\n"
+                    # f"L2 error of L(x) (augmented objective) convergance criterion met at iteration: {self.iteration} for lambda : {self.objective.lambdas} with norm: {np.linalg.norm(val - self.stored_f_x[-2])} \n"
+                    #     f"----------------------------------------\n")
+                    print(f"----------------------------------------\n"
+                    f"Inner loop termination condition 2. L2 error of mean(x) convergance criterion met at iteration # j: {i} for lambda : {self.objective.lambdas} with RMSE: {rmse.item()} \n"
+                        f"----------------------------------------\n")
+                    theta_norm_convergance_criterion = True
+                    break
+        if theta_norm_convergance_criterion==False and condition_1 ==False:
+            print(f"-------------------------------------------\n"
+              f"Inner loop termination condition 3. Total no. of iterations crtirion met. The maximum number of inner-loop iterations : {num_steps_per_lambda} is reached for the given lambda : {self.objective.lambdas}\n"
+              f"-------------------------------------------\n")
 
                 
     
@@ -196,6 +271,7 @@ class Stochastic_Optimizer():
         num_steps_per_lambda : int, optional
             Number of optimization steps with fixed value of lambdas., by default 100
         """
+        sigma_norm_convergance_criterion = False
         if self.optimizer is None:
             print('Optimizer is not created, reverting to default Adam optimizer with lr 1e-2')
             self.optimizer = torch.optim.Adam(self.parameters[0], lr=1e-2)
@@ -204,6 +280,26 @@ class Stochastic_Optimizer():
             self.optimize_fixed_lambda(lambdas, num_steps_per_lambda)
             print(self.objective.lambdas, self.get_final_state())
             lambdas = lambdas + 1
+
+            # convergance criterion for the outher loop
+            # if cnstraint are less the specied value and (||sigma^2|| <-= tol break)
+            #l2_norm = torch.norm(torch.exp(self.parameters[0][self.dim:]))
+            # TODO: can add || |x_lambda* - x_{lambda-1}*|| < tol also as a convergance criterion
+            with torch.no_grad():
+                rms = torch.sqrt(torch.mean(torch.square(torch.exp(self.parameters[0][self.dim:]))))
+            if rms.item() <= self.tolerance_sigma:
+            #if np.linalg.norm(self.stored_constraints_mean[-1])<=self.tol_constraints  and rms.item() <= self.tolerance_sigma:
+            #if np.linalg.norm(self.stored_constraints_mean[-1])<=self.tol_constraints  and l2_norm.item() <= self.tolerance_sigma:
+                print(f"----------------------------------------\n"
+                      f"Outer loop terminating. L2 norm of sigma^2 convergance criterion met at iteration: {self.iteration}\n"
+                      f"----------------------------------------\n")
+                sigma_norm_convergance_criterion = True
+                break
+        if not sigma_norm_convergance_criterion:
+            print(f"-------------------------------------------\n"
+               f" Outer loop terminating. Max no. of iterations crtirion met. The number of iterations : {self.iteration} is reached for the given lambda : {self.objective.lambdas}\n"
+                f"-------------------------------------------\n")
+
 
     def unconstrained_optimization(self, num_steps: int=100):
         """Function that performs unconstrained optimization.
@@ -214,6 +310,7 @@ class Stochastic_Optimizer():
         num_steps : int, optional
             number of optimization steps, by default 100
         """
+        sigma_convergance_criterion = False
         for i in range(num_steps):
             val, grad = self.objective.function_wrapper(self.parameters[0])
             if self.natural_gradients:
@@ -227,12 +324,27 @@ class Stochastic_Optimizer():
             self.iteration = i
 
             # print the output
-            if self.verbose and i%10 == 0:
-                print(f'Iteration: {i}, lambdas: {self.objective.lambdas}, L(x): {val}, f(x): {self.objective.objective_value}, theta_mean : {self.stored_results[-1][:self.dim]}, theta_beta : {self.stored_results[-1][self.dim:]} ')
+            if self.verbose and i%25 == 0:
+                print(f'Iteration: {i}, L(x): {val}, f(x): {self.objective.objective_value}, theta_mean : {self.stored_results[-1][:self.dim]}, theta_beta : {self.stored_results[-1][self.dim:]} ')
 
             # convergance criterion if (||sigma^2|| <-= 10^-06 break)
-            # if np.linalg.norm(np.exp(2*self.parameters[0][self.dim:].detach().numpy())) <= 1e-06:
-            #     break
+            #l2_norm = torch.norm(torch.exp(self.parameters[0][self.dim:]))
+            
+            with torch.no_grad():
+                rms = torch.sqrt(torch.mean(torch.square(torch.exp(self.parameters[0][self.dim:]))))
+            if i%100 == 0:
+                print(f"RMS of sigma^2 is {rms.item()} at iteration: {i}")
+            #if l2_norm.item() <= self.tolerance_sigma:
+            if rms.item() <= self.tolerance_sigma:
+                print(f"----------------------------------------\n"
+                      f"Root mean sq. of sigma^2 is {rms.item()}, convergance criterion met at iteration: {i}\n"
+                      f"----------------------------------------\n")
+                sigma_convergance_criterion = True
+                break
+        if not sigma_convergance_criterion:
+            print(f"-------------------------------------------\n"
+                f"no. of iterations crtirion met. The maximum number of iterations : {num_steps} is reached.\n"
+                f"-------------------------------------------\n")
     
     def optimize(self, **kwargs):
         """Function to optmize the objective function
@@ -258,17 +370,19 @@ class Stochastic_Optimizer():
 
             Returns:
                 If there are constraints, returns a tuple containing the augmented objective mean,
-                objective mean, and constraints mean as numpy arrays.
+                objective mean, and constraints mean and lambdas as numpy arrays.
                 If there are no constraints, returns a tuple containing the augmented objective mean
                 and objective mean as numpy arrays.
             """
            
             aug_objective_mean = np.array(self.stored_f_x)
             objective_mean = np.array(self.stored_objective_mean)
+            
 
             if self.objective.num_constraints > 0:
                 constraints_mean = np.array(self.stored_constraints_mean)
-                return aug_objective_mean, objective_mean, constraints_mean
+                lambdas = np.array(self.stored_lambdas)
+                return aug_objective_mean, objective_mean, constraints_mean, lambdas
             else:
                 return aug_objective_mean, objective_mean
         
@@ -277,7 +391,7 @@ class Stochastic_Optimizer():
             Returns the evolution of the design variables.
 
             Returns:
-                x_mean (ndarray): The evolution of the mean design variables.
+                x_mean (ndarray): [Nx dim] with N being of step. The evolution of the mean design variables.
                 x_beta (ndarray): The evolution of the beta design variables.
             """
             # convert list of tensors in store_results to numpy array
@@ -285,6 +399,57 @@ class Stochastic_Optimizer():
             x_mean = des_variables[:, :self.dim]
             x_beta = des_variables[:, self.dim:]
             return x_mean, x_beta
+    
+    def save_results(self, path:str):
+        """Saves the results of the optimization in the given path.
+
+        Parameters
+        ----------
+        path : str
+            Path to save the results.
+        """
+        
+        x_mean, x_beta = self.get_design_variable_evolution()
+        np.save(f'{path}/design_variable_mean_evolution_{datetime}.npy', x_mean)
+        np.save(f'{path}/design_variable_beta_evolution_{datetime}.npy', x_beta)
+
+
+        np.save(f'{path}/final_state_{datetime}.npy', self.get_final_state())
+
+        if self.objective.num_constraints > 0:
+            aug_obj, obj, constraints, lambdas = self.get_objective_constraint_evolution()
+            np.save(f'{path}/constraint_evolution_{datetime}.npy', constraints)
+            np.save(f'{path}/lambda_evolution_{datetime}.npy', lambdas)
+            np.save(f'{path}/objective_evolution_{datetime}.npy', obj)
+            np.save(f'{path}/augmented_objective_evolution_{datetime}.npy', aug_obj)
+        else:
+            aug_obj, obj = self.get_objective_constraint_evolution()
+            np.save(f'{path}/objective_evolution_{datetime}.npy', obj)
+            np.save(f'{path}/augmented_objective_evolution_{datetime}.npy', aug_obj)
+
+        
+    def plot_results(self, path:str, save_name:str):
+            """
+            Plot the results of the stochastic optimizer.
+
+            Parameters:
+            path (str): The path where the plots will be saved.
+            save_name (str): The name of the saved plot file.
+            """
+            x_mean, x_beta = self.get_design_variable_evolution()
+
+            if self.objective.num_constraints > 0:
+                aug_obj, obj, constraints, lambdas = self.get_objective_constraint_evolution()
+                ve = variable_evolution(L_x=aug_obj, f_x=obj, mu=x_mean, beta=x_beta, path=path, save_name=save_name,C_x=constraints,lambdas=lambdas)
+            else:
+                aug_obj, obj = self.get_objective_constraint_evolution()
+                ve = variable_evolution(L_x=aug_obj, f_x=obj, mu=x_mean, beta=x_beta, path=path, save_name=save_name)   
+            ve.plot_all()
+
+        
+
+        
+        
     
 
 def sphere(x):

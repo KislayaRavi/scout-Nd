@@ -6,8 +6,8 @@ from matplotlib import pyplot as plt
 from matplotlib import rc
 from itertools import product
 
-from scoutNd.stochastic_optimizer import Stochastic_Optimizer
-from scoutNd.objective_function import Baseline1
+#from scoutNd.stochastic_optimizer import Stochastic_Optimizer
+#from scoutNd.objective_function import Baseline1
 # add bm, amsmath and all that to matplotlib
 
 
@@ -40,13 +40,14 @@ import time
 datetime = time.strftime("%Y%m%d-%H%M%S")
 
 class variable_evolution:
-    def __init__(self, L_x:np.ndarray, f_x:np.ndarray, C_x:np.ndarray, mu:np.ndarray, beta:np.ndarray, path:str,save_name :str, **kwargs):
+    def __init__(self, L_x:np.ndarray, f_x:np.ndarray, mu:np.ndarray, beta:np.ndarray, path:str,save_name :str, C_x =None, lambdas =None, **kwargs):
         """"""
         self.L_x = L_x # Augmented objective function
         self.f_x = f_x # Objective function
         self.C_x = C_x # Constraints
         self.mu = mu # mean of the design variables
         self.beta = beta # variance of the design variables
+        self.lambdas = lambdas # penalty term multipliers
         if not os.path.exists(path):
             os.makedirs(path)
         self.path = path # path to save the plots
@@ -112,7 +113,7 @@ class variable_evolution:
         fig = plt.figure()
         ax = fig.add_subplot(111)
         var = np.exp(self.beta)
-        ax.plot(var)
+        ax.semilogy(var)
         #ax.set_title(r'$\beta$ evolution')
         ax.set_xlabel('Iterations')
         ax.set_ylabel(r'$\sigma^2$')
@@ -121,11 +122,30 @@ class variable_evolution:
         plt.tight_layout()
         plt.savefig(f'{self.path}/{self.save_name}_variance_evolution_{datetime}.pdf')
 
+    def plot_lambdas(self):
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.semilogy(self.lambdas)
+        #ax.set_title(r'$\lambda$ evolution')
+        ax.set_xlabel('Iterations')
+        ax.set_ylabel(r'$\lambda$')
+
+        ax.grid()
+        plt.tight_layout()
+        plt.savefig(f'{self.path}/{self.save_name}_lambda_evolution_{datetime}.pdf')
+
+    # TODO: add Lambda evolution plot
+
     # a function to plot all the evolution
     def plot_all(self):
         self.aug_objective()
         self.obective()
-        self.constraints()
+        #self.constraints()
         self.mean()
         self.variance()
+        #self.plot_lambdas()
+
+        if self.C_x is not None:
+            self.constraints()
+            self.plot_lambdas()
 
