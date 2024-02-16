@@ -33,9 +33,9 @@ rc('figure', titlesize=MEDIUM_SIZE)  # fontsize of the figure titles
 
 torch.set_default_dtype(torch.float64)
 # fix the seed
-seed = 666
-np.random.seed(seed)
-torch.random.manual_seed(seed)
+# seed = 666
+# np.random.seed(seed)
+# torch.random.manual_seed(seed)
 import time
 datetime = time.strftime("%Y%m%d-%H%M%S")
 

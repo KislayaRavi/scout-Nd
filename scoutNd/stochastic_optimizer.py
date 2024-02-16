@@ -168,7 +168,9 @@ class Stochastic_Optimizer():
 
             # break condition 1: 20 iterations have passed and each entry of the constraint is more than the tolearnce. meaning lambda is not able to decrease the constraint. this wouldnt be triggered when
             # we start from constraint satisfaction region
-            if i > 20 and all(val > self.tol_constraints for val in self.stored_constraints_mean[-10:]):
+            #if i > 20 and all(val > self.tol_constraints for val in self.stored_constraints_mean[-10:]):
+            # if any of the last 10 values of the constraints after 20 iterations are greater than the tolerance, then break
+            if i > 20 and all(any(v > self.tol_constraints for v in val) for val in self.stored_constraints_mean[-10:]):
             #if self.iteration > 20 and np.linalg.norm(self.stored_constraints_mean[-5:]) > self.tol_constraints:
                 condition_1 = True
                 print(f"-------------------------------------------\n"
