@@ -250,7 +250,8 @@ class Stochastic_Optimizer():
         fim_dampening_coeff = 1e-1
         #dampening_coeff_lower_bound = 1e-8
         dampening_coeff_lower_bound = 1e-5
-        fim_decay_start = 50
+        #fim_decay_start = 50
+        fim_decay_start = 200
         if self.iteration > fim_decay_start:
             tmp = fim_dampening_coeff*np.exp(-(self.iteration - fim_decay_start)/fim_decay_start)
             dampening_coeff = max(tmp, dampening_coeff_lower_bound)
@@ -336,8 +337,8 @@ class Stochastic_Optimizer():
             
             with torch.no_grad():
                 rms = torch.sqrt(torch.mean(torch.square(torch.exp(self.parameters[0][self.dim:]))))
-            if i%100 == 0:
-                print(f"RMS of sigma^2 is {rms.item()} at iteration: {i}")
+            # if i%100 == 0:
+            #     print(f"RMS of sigma^2 is {rms.item()} at iteration: {i}")
             #if l2_norm.item() <= self.tolerance_sigma:
             if rms.item() <= self.tolerance_sigma:
                 print(f"----------------------------------------\n"

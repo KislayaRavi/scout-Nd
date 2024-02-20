@@ -38,14 +38,21 @@ class MultifidelityObjective():
             Type of variance reduction technique to be used in gradient approxiation.
         """
         
-        self.dim, self.num_constraints = dim, len(constraints)
+        self.dim = dim
+        if constraints is None:
+            self.num_constraints = 0
+        else:
+            self.num_constraints = len(constraints)
         self.num_fidelities, self.f_list = len(f_list), f_list
         self.list_objective = []
         self.num_samples = [1]*self.num_fidelities
         self.initialize_list(f_list, constraints, distribution, qmc, qmc_engine,
                              log_lambdas, correct_constraint_derivative, 
                              category_var_red)
-        self.update_lambdas(log_lambdas)
+        if self.num_constraints > 0:
+            self.update_lambdas(log_lambdas)
+        self.constrain_values = []  # placeholder for constraint values, size : no_constraints x 1
+        self.objective_value = []
 
     def set_num_samples(self, num_samples: np.ndarray)-> None:
         """Sets the array of the number of samples to be used for each estimator in the telscopic sum.
@@ -187,6 +194,9 @@ class MultifidelityObjective():
             temp_val, temp_grad = self.list_objective[i].function_wrapper(x)
             val = val + temp_val
             grad = grad + temp_grad
+        # adding objective and constraint values. Ugly now. takes values from the lowest fidelity
+        self.constrain_values = self.list_objective[0].constrain_values
+        self.objective_value = self.list_objective[0].objective_value
         return val, grad
 
     def update_lambdas(self, log_lambdas: np.ndarray):
@@ -214,9 +224,9 @@ def sphere(x):
 def sphere_lf(x):
     X = np.atleast_2d(x)
     val1 = np.sum(X**2, axis=1)
-    # val3 = np.random.normal(0, 0.01, val1.shape)
+    val3 = np.random.normal(0, 0.01, val1.shape)
     val2 = 0.001*np.sum(X, axis=1)
-    return val1 #+ val2 #+ val3
+    return val1 + val2 + val3
 
 def linear_constraint(X):
     x = np.atleast_2d(X)
@@ -225,10 +235,11 @@ def linear_constraint(X):
 if __name__ == '__main__':
     dim = 16
     constraints = [linear_constraint]
-    # constraints = None
+    #constraints = None
     obj = MultifidelityObjective(dim, [sphere_lf, sphere], constraints, qmc=True)
     obj.set_num_samples([64, 8])
-    optimizer = Stochastic_Optimizer(obj)
+    optimizer = Stochastic_Optimizer(obj,natural_gradients= True, verbose=True)
     optimizer.create_optimizer('Adam', lr=1e-2)
-    optimizer.optimize()
+    optimizer.optimize(num_lambdas =10, num_steps_per_lambda = 300)
+    #optimizer.optimize(num_steps = 300)
     print(optimizer.get_final_state())
