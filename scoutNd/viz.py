@@ -40,7 +40,7 @@ import time
 datetime = time.strftime("%Y%m%d-%H%M%S")
 
 class variable_evolution:
-    def __init__(self, L_x:np.ndarray, f_x:np.ndarray, mu:np.ndarray, beta:np.ndarray, path:str,save_name :str, C_x =None, lambdas =None, **kwargs):
+    def __init__(self, L_x:np.ndarray, f_x:np.ndarray, mu:np.ndarray, beta:np.ndarray, path:str=None,save_name :str=None, C_x =None, lambdas =None, **kwargs):
         """"""
         self.L_x = L_x # Augmented objective function
         self.f_x = f_x # Objective function
@@ -48,11 +48,12 @@ class variable_evolution:
         self.mu = mu # mean of the design variables
         self.beta = beta # variance of the design variables
         self.lambdas = lambdas # penalty term multipliers
-        if not os.path.exists(path):
+        # if path is not None and it doenst exist create it
+        if path is not None and not os.path.exists(path):
             os.makedirs(path)
         self.path = path # path to save the plots
         self.save_name = save_name # name of the file to save the plots
-    
+        
     def aug_objective(self):
         fig = plt.figure()
         ax = fig.add_subplot(111)
@@ -63,9 +64,12 @@ class variable_evolution:
         ax.set_ylabel(r'$\mathbb{E}[\mathcal{L}(\mathbf{\cdot})]$')
         ax.legend()
         ax.grid()
-        plt.tight_layout() 
-        plt.savefig(f'{self.path}/{self.save_name}_aug_objective_evolution_{datetime}.pdf')
-
+        plt.tight_layout()
+        # if path not none
+        if self.path is not None:
+            plt.savefig(f'{self.path}/{self.save_name}_aug_objective_evolution_{datetime}.pdf')
+        else:
+            plt.show()
     def obective(self):
         fig = plt.figure()
         ax = fig.add_subplot(111)
@@ -77,7 +81,10 @@ class variable_evolution:
         ax.legend()
         ax.grid()
         plt.tight_layout()
-        plt.savefig(f'{self.path}/{self.save_name}_objective_evolution_{datetime}.pdf')
+        if self.path is not None:
+            plt.savefig(f'{self.path}/{self.save_name}_objective_evolution_{datetime}.pdf')
+        else:
+            plt.show()
 
     def constraints(self):
         fig = plt.figure()
@@ -95,7 +102,10 @@ class variable_evolution:
         ax.legend()
         ax.grid()
         plt.tight_layout()
-        plt.savefig(f'{self.path}/{self.save_name}_constraints_evolution_{datetime}.pdf')
+        if self.path is not None:
+            plt.savefig(f'{self.path}/{self.save_name}_constraints_evolution_{datetime}.pdf')
+        else:
+            plt.show()
 
     def mean(self):
         fig = plt.figure()
@@ -107,12 +117,15 @@ class variable_evolution:
         #ax.legend()
         ax.grid()
         plt.tight_layout()
-        plt.savefig(f'{self.path}/{self.save_name}_mean_evolution_{datetime}.pdf')
+        if self.path is not None:
+            plt.savefig(f'{self.path}/{self.save_name}_mean_evolution_{datetime}.pdf')
+        else:
+            plt.show()
     
     def variance(self):
         fig = plt.figure()
         ax = fig.add_subplot(111)
-        var = np.exp(self.beta)
+        var = np.exp(2*self.beta) # sigma^2 = exp(2*beta)
         ax.semilogy(var)
         #ax.set_title(r'$\beta$ evolution')
         ax.set_xlabel('Iterations')
@@ -120,7 +133,10 @@ class variable_evolution:
         #ax.legend()
         ax.grid()
         plt.tight_layout()
-        plt.savefig(f'{self.path}/{self.save_name}_variance_evolution_{datetime}.pdf')
+        if self.path is not None:
+            plt.savefig(f'{self.path}/{self.save_name}_variance_evolution_{datetime}.pdf')
+        else:
+            plt.show()
 
     def plot_lambdas(self):
         fig = plt.figure()
@@ -132,7 +148,10 @@ class variable_evolution:
 
         ax.grid()
         plt.tight_layout()
-        plt.savefig(f'{self.path}/{self.save_name}_lambda_evolution_{datetime}.pdf')
+        if self.path is not None:
+            plt.savefig(f'{self.path}/{self.save_name}_lambda_evolution_{datetime}.pdf')
+        else:
+            plt.show()
 
     # TODO: add Lambda evolution plot
 

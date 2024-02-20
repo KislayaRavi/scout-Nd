@@ -86,6 +86,7 @@ class Stochastic_Optimizer():
         # set tolerance for constraints
         if 'tol_constraints' in kwargs.keys():
             self.tol_constraints = kwargs['tol_constraints']
+            print(f'L_2 norm Tolerance of constraints is set to {self.tol_constraints}')
         else:
             self.tol_constraints = 1e-03
             print(f'L_2 norm Tolerance of constraints is set to {self.tol_constraints}')
@@ -247,7 +248,8 @@ class Stochastic_Optimizer():
 
         #TODO add damped fim here
         fim_dampening_coeff = 1e-1
-        dampening_coeff_lower_bound = 1e-8
+        #dampening_coeff_lower_bound = 1e-8
+        dampening_coeff_lower_bound = 1e-5
         fim_decay_start = 50
         if self.iteration > fim_decay_start:
             tmp = fim_dampening_coeff*np.exp(-(self.iteration - fim_decay_start)/fim_decay_start)
@@ -288,7 +290,7 @@ class Stochastic_Optimizer():
             #l2_norm = torch.norm(torch.exp(self.parameters[0][self.dim:]))
             # TODO: can add || |x_lambda* - x_{lambda-1}*|| < tol also as a convergance criterion
             with torch.no_grad():
-                rms = torch.sqrt(torch.mean(torch.square(torch.exp(self.parameters[0][self.dim:]))))
+                rms = torch.sqrt(torch.mean(torch.square(torch.exp(2*self.parameters[0][self.dim:])))) # sigma^2 = e^(2*beta)
             if rms.item() <= self.tolerance_sigma:
             #if np.linalg.norm(self.stored_constraints_mean[-1])<=self.tol_constraints  and rms.item() <= self.tolerance_sigma:
             #if np.linalg.norm(self.stored_constraints_mean[-1])<=self.tol_constraints  and l2_norm.item() <= self.tolerance_sigma:
@@ -430,7 +432,7 @@ class Stochastic_Optimizer():
             np.save(f'{path}/augmented_objective_evolution_{datetime}.npy', aug_obj)
 
         
-    def plot_results(self, path:str, save_name:str):
+    def plot_results(self, path:str=None, save_name:str=None):
             """
             Plot the results of the stochastic optimizer.
 

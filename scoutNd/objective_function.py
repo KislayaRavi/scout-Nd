@@ -233,7 +233,7 @@ class ObjectiveAbstract(ABC):
             Samples drawn from the Gaussian distribution with given mean and variance.
         """
         if self.qmc:
-            dist = qmc.MultivariateNormalQMC(mean=mean, cov=np.diag(np.exp(scaled_sigma)))
+            dist = qmc.MultivariateNormalQMC(mean=mean, cov=np.diag(np.exp(scaled_sigma)**2))# TODO: check if this is correct. **2 is missing in cov  i think.
             samples = dist.random(self.num_samples)
         else:
             if self.dim == 1:
