@@ -3,7 +3,7 @@ import torch
 from scoutNd.objective_function import *
 import matplotlib.pyplot as plt
 from copy import deepcopy
-import sys
+import sys,os
 import time
 import pytest
 datetime = time.strftime("%Y%m%d-%H%M%S")
@@ -44,5 +44,7 @@ if __name__ == '__main__':
     obj = Baseline1(dim, sphere,constraints=None, num_samples=8, qmc=True, correct_constraint_derivative=True)
     optimizer = Stochastic_Optimizer(obj, natural_gradients= True, verbose=True, tolerance_sigma = 1e-03)
     optimizer.create_optimizer('Adam', lr=1e-2)
-    optimizer.optimize(num_steps = 2000)
+    optimizer.optimize(num_steps = 1000)
     print(optimizer.get_final_state())
+    path = os.getcwd() + '/tests/tmp'
+    optimizer.plot_results(path,'dim_2_sphere')

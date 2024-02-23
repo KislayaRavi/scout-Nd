@@ -27,12 +27,13 @@ if __name__ == '__main__':
     dim = 32
     #constraints = [linear_constraint]
     # constraints = None
-    obj = Baseline1(dim, sphere,constraints=[linear_constraint], num_samples=128, qmc=True, correct_constraint_derivative=True)
-    optimizer = Stochastic_Optimizer(obj, natural_gradients= True, verbose=True)
-    optimizer.create_optimizer('Adam', lr=1e-2)
-    optimizer.optimize(num_lambdas =10, num_steps_per_lambda = 300)
+    obj = Baseline1(dim, sphere,constraints=[linear_constraint], num_samples=64, qmc=True, correct_constraint_derivative=True)
+    optimizer = Stochastic_Optimizer(obj, natural_gradients= True, verbose=True,tolerance_sigma = 1e-04)
+    optimizer.create_optimizer('Adam', lr=1e-1)
+    optimizer.optimize(num_lambdas =5, num_steps_per_lambda = 200)
     #print(optimizer.get_objective_constraint_evolution())
     path = os.getcwd() + '/tests/tmp'
     #optimizer.save_results(path)
     print(optimizer.get_final_state())
     optimizer.plot_results(path, 'dim_32_sphere')
+    #optimizer.plot_results()

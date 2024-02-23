@@ -102,7 +102,11 @@ class MultifidelityObjective():
                                                                    category_var_red))
         for i in range(1, self.num_fidelities):
             def func_def(x):
-                return f_list[i](x) - f_list[i-1](x)
+                if type(f_list[i](x)) == list:
+                    return np.array(f_list[i](x)) - np.array(f_list[i-1](x))
+                else:
+                    return f_list[i](x) - f_list[i-1](x)
+                
             self.list_objective.append(
                 self.create_sf_objective_object(func_def, None, self.num_samples[i], distribution,
                                                 qmc, qmc_engine, None,
@@ -219,6 +223,7 @@ def sphere(x):
     val1 = np.sum(X**2, axis=1)
     # val2 = np.random.normal(0, 0.0001, val1.shape)
     val2 = 0.0
+    #print(f'val1 is {val1} and val2 is {val2}')
     return val1 + val2
 
 def sphere_lf(x):

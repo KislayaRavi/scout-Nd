@@ -149,7 +149,7 @@ class Stochastic_Optimizer():
             if self.natural_gradients:
                 grad = self._get_fim_adjusted_gradient(self.parameters[0][self.dim:].detach().numpy(), grad)
             self.parameters[0].grad = torch.tensor(grad) # Tis could be problemtic in GPUs when device is not set correctly
-            self.optimizer.step()
+            #self.optimizer.step()
             self.stored_results.append(deepcopy(self.parameters[0])) # storing thetas
             self.stored_f_x.append(val) # storing f(x) values
             self.stored_objective_mean.append(self.objective.objective_value)
@@ -161,8 +161,21 @@ class Stochastic_Optimizer():
 
             # print the output
             if self.verbose and i%25 == 0:
-                print(f'Iteration: {self.iteration}, lambdas: {self.objective.lambdas}, L(x): {val}, f(x): {self.objective.objective_value}, C(x) : {self.objective.constrain_values}, theta_mean : {self.stored_results[-1][:self.dim]}, theta_beta : {self.stored_results[-1][self.dim:]} ')
-
+                with torch.no_grad():
+                    rms_sigma_square = torch.sqrt(torch.mean(torch.square(torch.exp(self.parameters[0][self.dim:]))))
+                print(
+                f'Iteration: {self.iteration}, '
+                f'lambdas: {self.objective.lambdas}, '
+                f'L(x): {val}, '
+                f'f(x): {self.objective.objective_value}, '
+                f'C(x) : {self.objective.constrain_values}, '
+                f'theta_mean : {self.stored_results[-1][:self.dim]}, '
+                f'theta_beta : {self.stored_results[-1][self.dim:]}, '
+                f'rms_sigma_square : {rms_sigma_square.item()}'
+            )
+                
+            # take gradient step
+            self.optimizer.step()
             # convergance criterion here
             # if ||f_x -f_x_prev|| < 1e-06 break
             #if len(self.stored_f_x) > 1 and np.linalg.norm(val - self.stored_f_x[-2]) <= self.tolerance_L_x:
@@ -251,7 +264,7 @@ class Stochastic_Optimizer():
         #dampening_coeff_lower_bound = 1e-8
         dampening_coeff_lower_bound = 1e-5
         #fim_decay_start = 50
-        fim_decay_start = 200
+        fim_decay_start = 100
         if self.iteration > fim_decay_start:
             tmp = fim_dampening_coeff*np.exp(-(self.iteration - fim_decay_start)/fim_decay_start)
             dampening_coeff = max(tmp, dampening_coeff_lower_bound)
@@ -321,7 +334,7 @@ class Stochastic_Optimizer():
             if self.natural_gradients:
                 grad = self._get_fim_adjusted_gradient(self.parameters[0][self.dim:].detach().numpy(), grad)
             self.parameters[0].grad = torch.tensor(grad) # Tis could be problemtic in GPUs when device is not set correctly
-            self.optimizer.step()
+            #self.optimizer.step()
             # store numpy of parmeters in stored_results
             self.stored_results.append(deepcopy(self.parameters[0]))
             self.stored_f_x.append(val) # storing f(x) values
@@ -331,7 +344,9 @@ class Stochastic_Optimizer():
             # print the output
             if self.verbose and i%25 == 0:
                 print(f'Iteration: {i}, L(x): {val}, f(x): {self.objective.objective_value}, theta_mean : {self.stored_results[-1][:self.dim]}, theta_beta : {self.stored_results[-1][self.dim:]} ')
-
+            
+            # take gradient step
+            self.optimizer.step()
             # convergance criterion if (||sigma^2|| <-= 10^-06 break)
             #l2_norm = torch.norm(torch.exp(self.parameters[0][self.dim:]))
             
@@ -415,6 +430,10 @@ class Stochastic_Optimizer():
         """
         
         x_mean, x_beta = self.get_design_variable_evolution()
+
+        # delete first row, somehow its the same as the final state
+        x_mean = x_mean[1:]
+        x_beta = x_beta[1:]
         np.save(f'{path}/design_variable_mean_evolution_{datetime}.npy', x_mean)
         np.save(f'{path}/design_variable_beta_evolution_{datetime}.npy', x_beta)
 
@@ -442,6 +461,10 @@ class Stochastic_Optimizer():
             save_name (str): The name of the saved plot file.
             """
             x_mean, x_beta = self.get_design_variable_evolution()
+
+            # delete first row, somehow its the same as the final state
+            x_mean = x_mean[1:]
+            x_beta = x_beta[1:]
 
             if self.objective.num_constraints > 0:
                 aug_obj, obj, constraints, lambdas = self.get_objective_constraint_evolution()
