@@ -218,26 +218,30 @@ class MultifidelityObjective():
         self.list_objective[0].update_lambdas(log_lambdas)
 
 
-def sphere(x):
-    X = np.atleast_2d(x)
-    val1 = np.sum(X**2, axis=1)
-    # val2 = np.random.normal(0, 0.0001, val1.shape)
-    val2 = 0.0
-    #print(f'val1 is {val1} and val2 is {val2}')
-    return val1 + val2
 
-def sphere_lf(x):
-    X = np.atleast_2d(x)
-    val1 = np.sum(X**2, axis=1)
-    val3 = np.random.normal(0, 0.01, val1.shape)
-    val2 = 0.001*np.sum(X, axis=1)
-    return val1 + val2 + val3
-
-def linear_constraint(X):
-    x = np.atleast_2d(X)
-    return 1 - x[:, 0] - x[:, 1]
 
 if __name__ == '__main__':
+
+    def sphere(x):
+        X = np.atleast_2d(x)
+        val1 = np.sum(X**2, axis=1)
+        # val2 = np.random.normal(0, 0.0001, val1.shape)
+        val2 = 0.0
+        #print(f'val1 is {val1} and val2 is {val2}')
+        return val1 + val2
+
+    def sphere_lf(x):
+        X = np.atleast_2d(x)
+        val1 = np.sum(X**2, axis=1)
+        val3 = np.random.normal(0, 0.01, val1.shape)
+        val2 = 0.001*np.sum(X, axis=1)
+        return val1 + val2 + val3
+
+    def linear_constraint(X):
+        x = np.atleast_2d(X)
+        return 1 - x[:, 0] - x[:, 1]
+
+
     dim = 16
     constraints = [linear_constraint]
     #constraints = None

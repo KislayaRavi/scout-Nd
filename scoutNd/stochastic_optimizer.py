@@ -8,7 +8,6 @@ import sys
 import time
 datetime = time.strftime("%Y%m%d-%H%M%S")
 
- #seed = 0
 
 
 class Stochastic_Optimizer():
@@ -39,10 +38,12 @@ class Stochastic_Optimizer():
         self.dim = self.objective.dim
         if 'initial_val' in kwargs.keys():
             self.set_initial_val(kwargs['initial_val'])
+            print(f'Initial values are set to {kwargs["initial_val"]}')
         else:
             x0 = np.ones(2*self.dim)
             x0[self.dim:] = -1
             self.set_initial_val(x0)
+            print(f'Initial values are set to default value: {x0}')
         self.stored_results = [self.initial_val] # stores evolution of thetas
         self.stored_f_x = [] # stores evolution of f(x) i.e obj + lambda_i c_i(x)
         self.stored_objective_mean = []
@@ -72,24 +73,26 @@ class Stochastic_Optimizer():
         #     print(f'L_2 norm Tolerance of L(x) per lambda is set to {self.tolerance_L_x}')
         if 'tolerance_theta' in kwargs.keys():
             self.tolerance_theta = kwargs['tolerance_theta']
+            print(f'RMSE Tolerance of theta is set to {self.tolerance_theta}')
         else:
             self.tolerance_theta = 1e-04
-            print(f'L_2 norm Tolerance of theta is set to {self.tolerance_theta}')
+            print(f'RMSE Tolerance of theta is set to default value: {self.tolerance_theta}')
         
         # set tolerance for sigma^2
         if 'tolerance_sigma' in kwargs.keys():
             self.tolerance_sigma = kwargs['tolerance_sigma']
+            print(f'L_2 norm Tolerance of sigma^2 is set to {self.tolerance_sigma}')
         else:
             self.tolerance_sigma = 5e-03
-            print(f'L_2 norm Tolerance of sigma^2 is set to {self.tolerance_sigma}')
-
+            print(f'L_2 norm Tolerance of sigma^2 is set to default value: {self.tolerance_sigma}')
+        
         # set tolerance for constraints
         if 'tol_constraints' in kwargs.keys():
             self.tol_constraints = kwargs['tol_constraints']
-            print(f'L_2 norm Tolerance of constraints is set to {self.tol_constraints}')
+            print(f'Min value of constraints for inner-loop termination is set to {self.tol_constraints}')
         else:
             self.tol_constraints = 1e-03
-            print(f'L_2 norm Tolerance of constraints is set to {self.tol_constraints}')
+            print(f'Min value of constraints for inner-loop is set to default value:{self.tol_constraints}')
 
     def set_initial_val(self, initial_val:np.ndarray):
         """_summary_
@@ -157,7 +160,6 @@ class Stochastic_Optimizer():
             self.stored_lambdas.append(self.objective.lambdas)
             # keep adding the iteration number
             self.iteration+=1 # FIM kicks in after a certain value of iteration.
-            #self.iteration = i
 
             # print the output
             if self.verbose and i%25 == 0:
@@ -203,7 +205,7 @@ class Stochastic_Optimizer():
                     # f"L2 error of L(x) (augmented objective) convergance criterion met at iteration: {self.iteration} for lambda : {self.objective.lambdas} with norm: {np.linalg.norm(val - self.stored_f_x[-2])} \n"
                     #     f"----------------------------------------\n")
                     print(f"----------------------------------------\n"
-                    f"Inner loop termination condition 2. L2 error of mean(x) convergance criterion met at iteration # j: {i} for lambda : {self.objective.lambdas} with RMSE: {rmse.item()} \n"
+                    f"Inner loop termination condition 2. RMSE of mean(x) convergance criterion met at iteration # j: {i} for lambda : {self.objective.lambdas} with RMSE: {rmse.item()} \n"
                         f"----------------------------------------\n")
                     theta_norm_convergance_criterion = True
                     break
@@ -259,7 +261,7 @@ class Stochastic_Optimizer():
         fisher_diag = np.hstack((tmp,2*np.ones(self.dim)))
         fim = np.diag(fisher_diag)
 
-        #TODO add damped fim here
+        # adding damped fim here
         fim_dampening_coeff = 1e-1
         #dampening_coeff_lower_bound = 1e-8
         dampening_coeff_lower_bound = 1e-5
@@ -309,7 +311,7 @@ class Stochastic_Optimizer():
             #if np.linalg.norm(self.stored_constraints_mean[-1])<=self.tol_constraints  and rms.item() <= self.tolerance_sigma:
             #if np.linalg.norm(self.stored_constraints_mean[-1])<=self.tol_constraints  and l2_norm.item() <= self.tolerance_sigma:
                 print(f"----------------------------------------\n"
-                      f"Outer loop terminating. L2 norm of sigma^2 convergance criterion met at iteration: {self.iteration}\n"
+                      f"Outer loop terminating. RMS of sigma^2 convergance criterion met at iteration: {self.iteration}, with RMS sigma^2 = {rms.item()}\n"
                       f"----------------------------------------\n")
                 sigma_norm_convergance_criterion = True
                 break

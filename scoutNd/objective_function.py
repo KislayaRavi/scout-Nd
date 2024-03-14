@@ -319,7 +319,8 @@ class NoVarianceReduction(ObjectiveAbstract):
 
 class Baseline1(ObjectiveAbstract):
     """Objective function where the gradient evaluation is done using the method describe in Welling paper.
-
+    https://openreview.net/pdf?id=r1lgTGL5DE
+    This is the recommened baseline to use.
     """
 
     def __init__(self, dim: int, func: callable, constraints: list, **kwargs):

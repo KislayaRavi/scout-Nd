@@ -41,18 +41,34 @@ datetime = time.strftime("%Y%m%d-%H%M%S")
 
 class variable_evolution:
     def __init__(self, L_x:np.ndarray, f_x:np.ndarray, mu:np.ndarray, beta:np.ndarray, path:str=None,save_name :str=None, C_x =None, lambdas =None, **kwargs):
-        """"""
-        self.L_x = L_x # Augmented objective function
-        self.f_x = f_x # Objective function
-        self.C_x = C_x # Constraints
-        self.mu = mu # mean of the design variables
-        self.beta = beta # variance of the design variables
-        self.lambdas = lambdas # penalty term multipliers
-        # if path is not None and it doenst exist create it
+        """
+        Initialize the Viz class.
+
+        Parameters:
+        - L_x (np.ndarray): Augmented objective function.
+        - f_x (np.ndarray): Objective function.
+        - mu (np.ndarray): Mean of the design variables.
+        - beta (np.ndarray): Variance of the design variables.
+        - path (str, optional): Path to save the plots. Defaults to None.
+        - save_name (str, optional): Name of the file to save the plots. Defaults to None.
+        - C_x (optional): Constraints. Defaults to None.
+        - lambdas (optional): Penalty term multipliers. Defaults to None.
+        - **kwargs: Additional keyword arguments.
+
+        Returns:
+        None
+        """
+        self.L_x = L_x
+        self.f_x = f_x
+        self.C_x = C_x
+        self.mu = mu
+        self.beta = beta
+        self.lambdas = lambdas
+
         if path is not None and not os.path.exists(path):
             os.makedirs(path)
-        self.path = path # path to save the plots
-        self.save_name = save_name # name of the file to save the plots
+        self.path = path
+        self.save_name = save_name
         
     def aug_objective(self):
         fig = plt.figure()

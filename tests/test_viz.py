@@ -104,7 +104,9 @@ def test_variable_evolution_plot_all():
     file_path = os.getcwd() +'/tests'
     path = file_path + '/tmp'
     save_name = 'test'
-    ve = variable_evolution(L_x, f_x, mu, beta, path,C_x,lambdas, save_name)
+    path =None
+    save_name = None
+    ve = variable_evolution(L_x, f_x, mu, beta, path,save_name,C_x,lambdas)
     ve.plot_all()
     # TODO: Add assertions to check if all the plots are saved correctly
 
