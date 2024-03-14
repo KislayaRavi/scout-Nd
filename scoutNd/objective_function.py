@@ -37,6 +37,7 @@ class ObjectiveAbstract(ABC):
         """
         self.dim, self.func, self.distribution = dim, func, distribution
         self.constraints = []
+        #self.lambda_list = [] # storage for the lambda values
         if constraints is None:
             self.num_constraints = 0
         else:
@@ -47,6 +48,9 @@ class ObjectiveAbstract(ABC):
         self.correct_constraint_derivative = correct_constraint_derivative
         if self.num_constraints > 0:
             self.update_lambdas(log_lambdas)
+        self.constrain_values = None  # placeholder for constraint values, size : no_constraints x 1
+        self.objective_value = None
+        
 
     def create_constraints_list(self, constraints: list) -> None:
         """Create the attribute of list of constraints for the class.
@@ -57,11 +61,12 @@ class ObjectiveAbstract(ABC):
             List of callables representing the left-hand-side of less than equal to inequality constraint.
         """
         for i in range(self.num_constraints):
-            def constraint_wrapper(x):
-                y = constraints[i](x)
-                y[y<0] = 0
-                return y
-            self.constraints.append(constraint_wrapper)
+            # def constraint_wrapper(x):
+            #     y = constraints[i](x)
+            #     y[y<0] = 0
+            #     return y
+            # self.constraints.append(constraint_wrapper)
+            self.constraints.append(lambda x, i=i: np.maximum(0, constraints[i](x)))
 
     def deterministic_penalty_definition(self, constraint: callable, mean: float, 
                                          samples: np.ndarray, grad_logpdf_val: np.ndarray):
@@ -145,6 +150,7 @@ class ObjectiveAbstract(ABC):
             mean_array, grad_array = np.zeros(self.num_constraints), np.zeros((self.num_constraints, 2*self.dim))
             for idx, constraint in enumerate(self.constraints):
                 mean_array[idx], grad_array[idx, :] = self.deterministic_penalty_definition(constraint, mean, samples, grad_logpdf_val)
+            self.constrain_values = mean_array #storing constraint values at the current design point
             return np.sum(self.lambdas*mean_array), np.sum(self.lambdas[:,None]*grad_array, axis=0)
         
     def update_lambdas(self, log_lambdas: np.ndarray):
@@ -160,6 +166,7 @@ class ObjectiveAbstract(ABC):
         else:
             self.lambdas = np.exp(log_lambdas)
             assert len(self.lambdas) == len(self.constraints), 'Number of constraints should be equal to number of lambdas'
+        #self.lambda_list.append(self.lambdas)
     
     def grad_logpdf_one_sample(self, mean: np.ndarray, scaled_sigma: np.ndarray, sample: np.ndarray):
         """Evaluates the gradient of logarithm of the distribution with respect to the mean and the scaled sigma for a given sample.
@@ -226,7 +233,7 @@ class ObjectiveAbstract(ABC):
             Samples drawn from the Gaussian distribution with given mean and variance.
         """
         if self.qmc:
-            dist = qmc.MultivariateNormalQMC(mean=mean, cov=np.diag(np.exp(scaled_sigma)))
+            dist = qmc.MultivariateNormalQMC(mean=mean, cov=np.diag(np.exp(scaled_sigma)**2))# TODO: check if this is correct. **2 is missing in cov  i think.
             samples = dist.random(self.num_samples)
         else:
             if self.dim == 1:
@@ -255,6 +262,7 @@ class ObjectiveAbstract(ABC):
         grad_logpdf_val = self.grad_logpdf(mean, scaled_sigma, samples)
         mean_func, grad_func = self.estimator_mean_and_derivative(self.func, mean, samples, grad_logpdf_val)
         mean_penalty, grad_penalty = self.get_penalty(mean, samples, grad_logpdf_val)
+        self.objective_value = mean_func # storing objective at the current design point
         return mean_func + mean_penalty, grad_func + grad_penalty
 
     @abstractmethod
@@ -311,7 +319,8 @@ class NoVarianceReduction(ObjectiveAbstract):
 
 class Baseline1(ObjectiveAbstract):
     """Objective function where the gradient evaluation is done using the method describe in Welling paper.
-
+    https://openreview.net/pdf?id=r1lgTGL5DE
+    This is the recommened baseline to use.
     """
 
     def __init__(self, dim: int, func: callable, constraints: list, **kwargs):
