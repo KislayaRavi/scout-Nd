@@ -53,9 +53,11 @@ class Stochastic_Optimizer():
         self.iteration = 0
         if 'natural_gradients' in kwargs.keys():
             self.natural_gradients = kwargs['natural_gradients']
+        else: 
+            self.natural_gradients = False
+        if self.natural_gradients:        
             print("Natural gradients are being used")
         else:
-            self.natural_gradients = False
             print("Natural gradients are not being used")
         if 'verbose' in kwargs.keys():
             self.verbose = kwargs['verbose']
@@ -93,6 +95,12 @@ class Stochastic_Optimizer():
         else:
             self.tol_constraints = 1e-03
             print(f'Min value of constraints for inner-loop is set to default value:{self.tol_constraints}')
+        self.name_optimizer, self.optimizer_parameters = None, None
+        if 'reset_sigma' in kwargs.keys():
+            self.reset_sigma_flag = kwargs['reset_sigma']
+        else:
+            self.reset_sigma_flag = False
+        
 
     def set_initial_val(self, initial_val:np.ndarray):
         """_summary_
@@ -106,8 +114,16 @@ class Stochastic_Optimizer():
         self.initial_val = torch.tensor(initial_val, requires_grad=True)
         self.parameters = [self.initial_val] # TODO: transfer it to objective. This does not make sense in optimizer
 
+    def reset_sigma(self):
+        """_summary_
+        Reset the sigma^2 value to initial values.
+        """
+        self.optimizer.param_groups[0]['params'][0].data[self.dim:] = torch.tensor(self.initial_val[self.dim:].clone().detach(), requires_grad=True)
+
     def create_optimizer(self, name_optimizer:str, **optimizer_parameters:dict):
         name_optimizer = name_optimizer.lower()
+        if self.name_optimizer is None:
+            self.name_optimizer, self.optimizer_parameters = name_optimizer, optimizer_parameters
         if name_optimizer == 'adam':
             self.optimizer = torch.optim.Adam(self.parameters, **optimizer_parameters)
         elif name_optimizer == 'adadelta':
@@ -149,9 +165,10 @@ class Stochastic_Optimizer():
         self.objective.update_lambdas(log_lambdas)
         for i in range(num_steps_per_lambda):
             val, grad = self.objective.function_wrapper(self.parameters[0])
-            if self.natural_gradients:
+            phi = self.parameters[0][:self.dim].detach().numpy()
+            if self.natural_gradients and np.all(phi < -3):
                 grad = self._get_fim_adjusted_gradient(self.parameters[0][self.dim:].detach().numpy(), grad)
-            self.parameters[0].grad = torch.tensor(grad) # Tis could be problemtic in GPUs when device is not set correctly
+            self.parameters[0].grad = torch.tensor(grad) # This could be problemtic in GPUs when device is not set correctly
             #self.optimizer.step()
             self.stored_results.append(deepcopy(self.parameters[0])) # storing thetas
             self.stored_f_x.append(val) # storing f(x) values
@@ -213,8 +230,6 @@ class Stochastic_Optimizer():
             print(f"-------------------------------------------\n"
               f"Inner loop termination condition 3. Total no. of iterations crtirion met. The maximum number of inner-loop iterations : {num_steps_per_lambda} is reached for the given lambda : {self.objective.lambdas}\n"
               f"-------------------------------------------\n")
-
-                
     
     def _get_fim_adjusted_gradient(self, phi:np.ndarray, grad:np.ndarray):
         """Computes the adjusted gradient using the Fisher information matrix.
@@ -235,9 +250,11 @@ class Stochastic_Optimizer():
         assert grad.shape == (2*self.dim,), 'Incorrect shape of grad'
         fim = self._fisher_information_matrix(phi)
 
-        # --- by preinverting the matrix
-        fim_inv = np.matrix(fim).I
-        tilda_grad_U = np.matmul(fim_inv, grad).base # to return an array instead of matrix
+        # --- by preinverting the matrix <----- Comment from Ravi: 
+        # This is not needed. We can simply divide the grad by the FIM
+        # fim_inv = np.matrix(fim).I
+        # tilda_grad_U = np.matmul(fim_inv, grad).base # to return an array instead of matrix
+        tilda_grad_U = grad / fim
 
         # --- by solving the linear system
         #tilda_grad_U_ = np.linalg.solve(fim, grad)
@@ -258,8 +275,7 @@ class Stochastic_Optimizer():
         """
         assert phi.shape == (self.dim,), 'Incorrect shape of phi'
         tmp = np.exp(-2*phi)
-        fisher_diag = np.hstack((tmp,2*np.ones(self.dim)))
-        fim = np.diag(fisher_diag)
+        fim = np.hstack((tmp,2*np.ones(self.dim)))
 
         # adding damped fim here
         fim_dampening_coeff = 1e-1
@@ -273,10 +289,8 @@ class Stochastic_Optimizer():
         else:
             dampening_coeff = fim_dampening_coeff
         
-        fim = fim + dampening_coeff*np.eye(2*self.dim)
-        # check if FIM is invertible
-        # if np.linalg.cond(fim) > 1/sys.float_info.epsilon:
-        #     raise ValueError(f'Fisher information matrix is not invertible, it is: {fim}')
+        fim = fim + dampening_coeff
+        
         return fim
 
     def constrained_optimization(self, initial_log_lambdas:int=-1, num_lambdas:int=4, num_steps_per_lambda:int=100):
@@ -307,17 +321,31 @@ class Stochastic_Optimizer():
             # TODO: can add || |x_lambda* - x_{lambda-1}*|| < tol also as a convergance criterion
             with torch.no_grad():
                 rms = torch.sqrt(torch.mean(torch.square(torch.exp(2*self.parameters[0][self.dim:])))) # sigma^2 = e^(2*beta)
+            constraint_satisfied = all([v < self.tol_constraints for v in self.stored_constraints_mean[-1]])
             if rms.item() <= self.tolerance_sigma:
             #if np.linalg.norm(self.stored_constraints_mean[-1])<=self.tol_constraints  and rms.item() <= self.tolerance_sigma:
             #if np.linalg.norm(self.stored_constraints_mean[-1])<=self.tol_constraints  and l2_norm.item() <= self.tolerance_sigma:
+                if constraint_satisfied:
+                    print(f"----------------------------------------\n"
+                        f"Outer loop terminating. RMS of sigma^2 convergance criterion met at iteration: {self.iteration}, with RMS sigma^2 = {rms.item()}\n"
+                        f"----------------------------------------\n")
+                    sigma_norm_convergance_criterion = True
+                    break
+                else:
+                    print(f"----------------------------------------\n"
+                          f"Sigma^2 breaking criterion is satisfied even when constraints are not satistfied.\n"
+                          f"Therefore, setting the sigma to the initial value.\n"
+                          f"----------------------------------------\n")
+                    self.reset_sigma()
+            if self.reset_sigma_flag:
                 print(f"----------------------------------------\n"
-                      f"Outer loop terminating. RMS of sigma^2 convergance criterion met at iteration: {self.iteration}, with RMS sigma^2 = {rms.item()}\n"
+                      f"Resetting sigma^2 to the initial value.\n"
                       f"----------------------------------------\n")
-                sigma_norm_convergance_criterion = True
-                break
+                self.reset_sigma()
+
         if not sigma_norm_convergance_criterion:
             print(f"-------------------------------------------\n"
-               f" Outer loop terminating. Max no. of iterations crtirion met. The number of iterations : {self.iteration} is reached for the given lambda : {self.objective.lambdas}\n"
+               f" Outer loop terminating. Max no. of iterations criterion met. The number of iterations : {self.iteration} is reached for the given lambda : {self.objective.lambdas}\n"
                 f"-------------------------------------------\n")
 
 
@@ -333,9 +361,10 @@ class Stochastic_Optimizer():
         sigma_convergance_criterion = False
         for i in range(num_steps):
             val, grad = self.objective.function_wrapper(self.parameters[0])
-            if self.natural_gradients:
-                grad = self._get_fim_adjusted_gradient(self.parameters[0][self.dim:].detach().numpy(), grad)
-            self.parameters[0].grad = torch.tensor(grad) # Tis could be problemtic in GPUs when device is not set correctly
+            phi = self.parameters[0][:self.dim].detach().numpy()
+            if self.natural_gradients and np.all(phi < -3):
+                grad = self._get_fim_adjusted_gradient(phi, grad)
+            self.parameters[0].grad = torch.tensor(grad) # This could be problemtic in GPUs when device is not set correctly
             #self.optimizer.step()
             # store numpy of parmeters in stored_results
             self.stored_results.append(deepcopy(self.parameters[0]))
@@ -365,7 +394,7 @@ class Stochastic_Optimizer():
                 break
         if not sigma_convergance_criterion:
             print(f"-------------------------------------------\n"
-                f"no. of iterations crtirion met. The maximum number of iterations : {num_steps} is reached.\n"
+                f"no. of iterations criterion met. The maximum number of iterations : {num_steps} is reached.\n"
                 f"-------------------------------------------\n")
     
     def optimize(self, **kwargs):
