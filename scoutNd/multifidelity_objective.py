@@ -11,7 +11,9 @@ class MultifidelityObjective():
                  distribution: str='gaussian', qmc: bool=True,
                  qmc_engine: str='Sobol', log_lambdas: np.ndarray=None,
                  correct_constraint_derivative: bool=True,
-                 category_var_red: str='Baseline1') -> None:
+                 category_var_red: str='Baseline1',
+                 adaptive_sample_size: bool=False,
+                 cost_list: np.ndarray=None) -> None:
         """Constructor.
 
         Parameters
@@ -53,6 +55,11 @@ class MultifidelityObjective():
             self.update_lambdas(log_lambdas)
         self.constrain_values = []  # placeholder for constraint values, size : no_constraints x 1
         self.objective_value = []
+        self.adaptive_sample_size = adaptive_sample_size
+        if self.adaptive_sample_size and cost_list is None:
+            raise ValueError('Cost list should be provided for adaptive sample size')
+        self.cost_list = cost_list
+        self.sample_size_list = []
 
     def set_num_samples(self, num_samples: np.ndarray)-> None:
         """Sets the array of the number of samples to be used for each estimator in the telscopic sum.
@@ -174,7 +181,61 @@ class MultifidelityObjective():
             raise ValueError('Wrong name of the variance reduction technique, ' +
                 'Options are: NoVarianceReduction, Basline1 and Baseline2')
 
-    def function_wrapper(self, x:np.ndarray):
+    def adaptive_function_wrapper(self, x:np.ndarray, lr: float=0.01, eps_kl:float=0.01,
+                                  smallest_num_samples=8, biggest_num_samples=256, natural_gradients:bool=False):
+        """_summary_
+
+        Parameters
+        ----------
+        x : np.ndarray
+            Concatenated array of the mean and the scaled sigma where the objective function and penalty needs to be evaluated.
+
+        Returns
+        -------
+        np.ndarray
+            Sum of mean of function and the penalty.
+        np.ndarray
+            Sum of gradient of the function and the penalty.
+        """
+        val, grad = 0. , np.zeros(2*self.dim)
+        mean, scaled_sigma = x[:self.dim].detach().numpy(), x[self.dim:].detach().numpy()
+        new_num_samples = deepcopy(self.num_samples)
+        current_num_samples = np.zeros(self.num_fidelities, dtype=int)
+        constant1 = np.zeros(self.num_fidelities)
+        adjusted_variance_grad = np.zeros(self.num_fidelities)
+        self.reset_values()
+        while True:
+            for i in range(self.num_fidelities):
+                if new_num_samples[i] > 2:
+                    self.list_objective[i].mf_objective(new_num_samples[i], mean, scaled_sigma, natural_gradients=natural_gradients)
+                    constant1[i] = np.sqrt(self.list_objective[i].var_of_meangrad * self.cost_list[i])
+                    adjusted_variance_grad[i] = self.list_objective[i].var_of_meangrad/self.cost_list[i]
+                current_num_samples[i] = len(self.list_objective[i].samples)
+            suggested_num_samples = np.array(lr**2 * np.sum(constant1) * np.sqrt(adjusted_variance_grad) / eps_kl, dtype=int)
+            # print("Initial suggested number of samples ", suggested_num_samples)
+            suggested_num_samples = np.minimum(biggest_num_samples*np.ones(self.num_fidelities, dtype=int), 
+                                               np.maximum(suggested_num_samples, smallest_num_samples*np.ones(self.num_fidelities, dtype=int)))
+            new_num_samples = suggested_num_samples - current_num_samples
+            new_num_samples[new_num_samples > 100] = 100
+            # print("Suggested, new, current ", suggested_num_samples, new_num_samples, current_num_samples)
+            if np.max(new_num_samples) < 3:
+                # print("Number of samples are too low, exiting the loop")
+                break
+            # else: 
+            #     print("Number of samples are too high, continuing the loop")
+        for i in range(self.num_fidelities):
+            val += np.mean(self.list_objective[i].f_val)
+            grad += self.list_objective[i].grad_mean
+            self.num_samples[i] = max(4, suggested_num_samples[i])
+            # print("Number of samples for fidelity ", i, " is ", self.num_samples[i])
+        self.sample_size_list.append(current_num_samples)
+        return val, grad
+    
+    def reset_values(self):
+        for l in self.list_objective:
+            l.reset_values()
+
+    def non_adaptive_function_wrapper(self, x:np.ndarray):
         """_summary_
 
         Parameters
@@ -199,9 +260,31 @@ class MultifidelityObjective():
             val = val + temp_val
             grad = grad + temp_grad
         # adding objective and constraint values. Ugly now. takes values from the lowest fidelity
-        self.constrain_values = self.list_objective[0].constrain_values
-        self.objective_value = self.list_objective[0].objective_value
+        # this is incorrect. Commenting things out.
+        # self.constrain_values = self.list_objective[0].constrain_values
+        # self.objective_value = self.list_objective[0].objective_value
+        self.sample_size_list.append(self.num_samples)
         return val, grad
+    
+    def function_wrapper(self, x:np.ndarray, natural_gradients: bool=False, **kwargs):
+        """_summary_
+
+        Parameters
+        ----------
+        x : np.ndarray
+            Concatenated array of the mean and the scaled sigma where the objective function and penalty needs to be evaluated.
+
+        Returns
+        -------
+        np.ndarray
+            Sum of mean of function and the penalty.
+        np.ndarray
+            Sum of gradient of the function and the penalty.
+        """
+        if self.adaptive_sample_size:
+            return self.adaptive_function_wrapper(x, natural_gradients=natural_gradients, **kwargs)
+        else:
+            return self.non_adaptive_function_wrapper(x)
 
     def update_lambdas(self, log_lambdas: np.ndarray):
         """Updates the scaling of penalty term
@@ -233,22 +316,29 @@ if __name__ == '__main__':
     def sphere_lf(x):
         X = np.atleast_2d(x)
         val1 = np.sum(X**2, axis=1)
-        val3 = np.random.normal(0, 0.01, val1.shape)
-        val2 = 0.001*np.sum(X, axis=1)
-        return val1 + val2 + val3
+        # val3 = np.random.normal(0, 0.01, val1.shape)
+        val2 = 0.1*np.sum(X, axis=1)
+        return val1 + val2 #+ val3
 
     def linear_constraint(X):
         x = np.atleast_2d(X)
         return 1 - x[:, 0] - x[:, 1]
 
 
-    dim = 16
-    constraints = [linear_constraint]
-    #constraints = None
-    obj = MultifidelityObjective(dim, [sphere_lf, sphere], constraints, qmc=True)
+if __name__ == '__main__':
+    dim = 32
+    # constraints = [linear_constraint]
+    constraints = None
+    obj = MultifidelityObjective(dim, [sphere_lf, sphere], constraints, qmc=False, adaptive_sample_size=True, cost_list=[1, 4])
     obj.set_num_samples([64, 8])
-    optimizer = Stochastic_Optimizer(obj,natural_gradients= True, verbose=True)
+    optimizer = Stochastic_Optimizer(obj,natural_gradients=False, verbose=True)
     optimizer.create_optimizer('Adam', lr=1e-2)
-    optimizer.optimize(num_lambdas =10, num_steps_per_lambda = 300)
-    #optimizer.optimize(num_steps = 300)
+    # optimizer.optimize(num_lambdas =4, num_steps_per_lambda = 100)
+    optimizer.optimize(num_steps = 1000)
     print(optimizer.get_final_state())
+    sample_size_array = np.array(obj.sample_size_list)
+    norm_cost = np.array(obj.cost_list)/obj.cost_list[-1]
+    cost_array = np.cumsum((sample_size_array[:, 0]*norm_cost[0]) + (sample_size_array[:, 1]*norm_cost[1]))
+    print(optimizer.stored_f_x[-1])
+    plt.plot(cost_array, optimizer.stored_f_x)
+    plt.show()

@@ -149,7 +149,7 @@ class Stochastic_Optimizer():
         else:
             raise NotImplementedError('Either the name of optimizer is wrong or it is not yet implemented in the code')
 
-    def optimize_fixed_lambda(self, log_lambdas:np.ndarray, num_steps_per_lambda:int):
+    def optimize_fixed_lambda(self, log_lambdas:np.ndarray, num_steps_per_lambda:int, natural_gradients_phi_cutoff:float=-2, **kwargs):
         """Performs optimization for fix value of lambdas for the given number of steps. This is the inner loop of the optimization.
         Synchronous to the "unconstrained_optmization" function below. Changes made here should be replicated there.
 
@@ -163,11 +163,13 @@ class Stochastic_Optimizer():
         theta_norm_convergance_criterion = False
         condition_1 = False
         self.objective.update_lambdas(log_lambdas)
-        for i in range(num_steps_per_lambda):
-            val, grad = self.objective.function_wrapper(self.parameters[0])
+        for i in range(num_steps_per_lambda):            
             phi = self.parameters[0][:self.dim].detach().numpy()
-            if self.natural_gradients and np.all(phi < -3):
+            if self.natural_gradients and np.all(phi < natural_gradients_phi_cutoff):
+                val, grad = self.objective.function_wrapper(self.parameters[0], natural_gradients=True, **kwargs)
                 grad = self._get_fim_adjusted_gradient(self.parameters[0][self.dim:].detach().numpy(), grad)
+            else:
+                val, grad = self.objective.function_wrapper(self.parameters[0], **kwargs)
             self.parameters[0].grad = torch.tensor(grad) # This could be problemtic in GPUs when device is not set correctly
             #self.optimizer.step()
             self.stored_results.append(deepcopy(self.parameters[0])) # storing thetas
@@ -293,7 +295,8 @@ class Stochastic_Optimizer():
         
         return fim
 
-    def constrained_optimization(self, initial_log_lambdas:int=-1, num_lambdas:int=4, num_steps_per_lambda:int=100):
+    def constrained_optimization(self, initial_log_lambdas:int=-1, num_lambdas:int=4, 
+                                 num_steps_per_lambda:int=100, natural_gradients_phi_cutoff:float=-2, **kwargs):
         """Function that performs constrained optimization.
 
         Parameters
@@ -311,12 +314,12 @@ class Stochastic_Optimizer():
             self.optimizer = torch.optim.Adam(self.parameters[0], lr=1e-2)
         lambdas = initial_log_lambdas*np.ones(self.objective.num_constraints) 
         for i in range(num_lambdas):
-            self.optimize_fixed_lambda(lambdas, num_steps_per_lambda)
+            self.optimize_fixed_lambda(lambdas, num_steps_per_lambda, natural_gradients_phi_cutoff=natural_gradients_phi_cutoff, **kwargs)
             print(self.objective.lambdas, self.get_final_state())
             lambdas = lambdas + 1
 
-            # convergance criterion for the outher loop
-            # if cnstraint are less the specied value and (||sigma^2|| <-= tol break)
+            # convergance criterion for the outer loop
+            # if constraint are less the specied value and (||sigma^2|| <-= tol break)
             #l2_norm = torch.norm(torch.exp(self.parameters[0][self.dim:]))
             # TODO: can add || |x_lambda* - x_{lambda-1}*|| < tol also as a convergance criterion
             with torch.no_grad():
@@ -349,7 +352,7 @@ class Stochastic_Optimizer():
                 f"-------------------------------------------\n")
 
 
-    def unconstrained_optimization(self, num_steps: int=100):
+    def unconstrained_optimization(self, num_steps: int=100, natural_gradients_phi_cutoff=-2, **kwargs):
         """Function that performs unconstrained optimization.
         Synchronous to the "get_fixed_lambda" function above. 
 
@@ -360,10 +363,12 @@ class Stochastic_Optimizer():
         """
         sigma_convergance_criterion = False
         for i in range(num_steps):
-            val, grad = self.objective.function_wrapper(self.parameters[0])
-            phi = self.parameters[0][:self.dim].detach().numpy()
-            if self.natural_gradients and np.all(phi < -3):
+            phi = self.parameters[0][self.dim:].detach().numpy()
+            if self.natural_gradients and np.all(phi < natural_gradients_phi_cutoff):
+                val, grad = self.objective.function_wrapper(self.parameters[0], natural_gradients=True, **kwargs)
                 grad = self._get_fim_adjusted_gradient(phi, grad)
+            else:
+                val, grad = self.objective.function_wrapper(self.parameters[0], **kwargs)
             self.parameters[0].grad = torch.tensor(grad) # This could be problemtic in GPUs when device is not set correctly
             #self.optimizer.step()
             # store numpy of parmeters in stored_results
@@ -523,11 +528,30 @@ def linear_constraint(X):
     return 1 - x[:, 0] - x[:, 1]
 
 if __name__ == '__main__':
-    dim = 32
-    constraints = [linear_constraint]
-    # constraints = None
-    obj = Baseline1(dim, sphere, constraints, num_samples=32, qmc=True, correct_constraint_derivative=True)
-    optimizer = Stochastic_Optimizer(obj)
+    dim = 8
+    # constraints = [linear_constraint]
+    constraints = None
+    num_steps=1000
+    obj = Baseline1(dim, sphere, constraints, num_samples=32, qmc=True, correct_constraint_derivative=True, adaptive_sample_size=False)
+    optimizer = Stochastic_Optimizer(obj, natural_gradients=True)
     optimizer.create_optimizer('Adam', lr=1e-2)
-    optimizer.optimize()
+    optimizer.optimize(num_steps=num_steps)
+    optimizer.optimize(num_steps_per_lambda=100)
     print(optimizer.get_final_state())
+    # print(obj.sample_size_list)
+    # plt.plot(obj.sample_size_list)
+    # plt.xlabel('Iteration number')
+    # plt.ylabel('Sample size')
+    # plt.show()
+    obj_adapt = Baseline1(dim, sphere, constraints, num_samples=64, qmc=False, correct_constraint_derivative=True, adaptive_sample_size=True)
+    optimizer_adapt = Stochastic_Optimizer(obj_adapt, natural_gradients=True)
+    optimizer_adapt.create_optimizer('Adam', lr=1e-2)
+    optimizer_adapt.optimize(num_steps=num_steps, eps_kl=0.001)
+    print(optimizer_adapt.get_final_state())
+    plt.plot(np.linspace(1, len(optimizer.stored_f_x)+1, len(optimizer.stored_f_x)), optimizer.stored_f_x, label='Fixed sample size')
+    plt.plot(np.linspace(1, num_steps+1, num_steps), optimizer_adapt.stored_f_x, label='Adaptive sample size')
+    plt.xlabel('Iteration number')
+    plt.ylabel('Objective value')
+    plt.yscale('log')
+    plt.legend()
+    plt.show()
