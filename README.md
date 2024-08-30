@@ -1,4 +1,5 @@
 [Atul Agrawal](mailto:atul.agrawal@tum.de) and [Kislaya Ravi](mailto:kislaya.ravi@tum.de)
+[![License: MIT](https://img.shields.io/badge/License-MIT-red.svg)](https://opensource.org/licenses/MIT)
 # scout-Nd
 
 We introduce SCOUT-Nd (Stochastic Constrained Optimization for N Dimensions) and MF-SCOUT-Nd (Multi-Fidelity Stochastic Constrained Optimization for N Dimensions) for constrained stochastic optimization involving stochastic black-box physics-based simulators with high-dimensional parametric dependency. The proposed algorithm consists of the following major elements:
