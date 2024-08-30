@@ -1,4 +1,5 @@
 [Atul Agrawal](mailto:atul.agrawal@tum.de) and [Kislaya Ravi](mailto:kislaya.ravi@tum.de)
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-red.svg)](https://opensource.org/licenses/MIT)
 # scout-Nd
 
