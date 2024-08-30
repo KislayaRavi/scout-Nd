@@ -13,6 +13,11 @@ We introduce SCOUT-Nd (Stochastic Constrained Optimization for N Dimensions) and
 
 The scripts to reproduce the studies in the paper will be made available upon publication. 
 
+### Benchmark codes [here](https://gitlab.lrz.de/ga83tum/scout-nd-benchmarking)
+### Real world example 
+- Windfarm layout optimization [here](https://github.com/atulag0711/windfarm_layout_optimization)
+- Pipe shape optimization [here]()
+
 
 ## Citation
 If you use this code, please cite our paper:
