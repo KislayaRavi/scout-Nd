@@ -1,3 +1,4 @@
+[Atul Agrawal](mailto:atul.agrawal@tum.de) and [Kislaya Ravi](mailto:kislaya.ravi@tum.de)
 # scout-Nd
 
 We introduce SCOUT-Nd (Stochastic Constrained Optimization for N Dimensions) and MF-SCOUT-Nd (Multi-Fidelity Stochastic Constrained Optimization for N Dimensions) for constrained stochastic optimization involving stochastic black-box physics-based simulators with high-dimensional parametric dependency. The proposed algorithm consists of the following major elements:
@@ -12,8 +13,9 @@ The scripts to reproduce the studies in the paper will be made available upon pu
 
 
 ## Citation
-```python
-@unpublished{agrawal:hal-04659802,
+If you use this code, please cite our paper:
+```
+@article{agrawal:hal-04659802,
   TITLE = {{Stochastic Black-Box Optimization using Multi-Fidelity Score Function Estimator}},
   AUTHOR = {Agrawal, Atul and Koutsourelakis, Phaedon-Stelios and Ravi, Kislaya and Bungartz, Hans-Joachim},
   URL = {https://hal.science/hal-04659802},
