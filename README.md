@@ -16,7 +16,7 @@ The scripts to reproduce the studies in the paper will be made available upon pu
 ### Benchmark codes [here](https://gitlab.lrz.de/ga83tum/scout-nd-benchmarking)
 ### Real world example 
 - Windfarm layout optimization [here](https://github.com/atulag0711/windfarm_layout_optimization)
-- Pipe shape optimization [here]()
+- Pipe shape optimization [code](), [student thesis] (https://mediatum.ub.tum.de/doc/1749210/1749210.pdf) 
 
 
 ## Citation
