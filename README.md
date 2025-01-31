@@ -22,15 +22,17 @@ The scripts to reproduce the studies in the paper will be made available upon pu
 ## Citation
 If you use this code, please cite our paper:
 ```
-@article{agrawal:hal-04659802,
-  TITLE = {{Stochastic Black-Box Optimization using Multi-Fidelity Score Function Estimator}},
-  AUTHOR = {Agrawal, Atul and Koutsourelakis, Phaedon-Stelios and Ravi, Kislaya and Bungartz, Hans-Joachim},
-  URL = {https://hal.science/hal-04659802},
-  NOTE = {working paper or preprint},
-  YEAR = {2024},
-  MONTH = Jul,
-  PDF = {https://hal.science/hal-04659802/file/scout_nd_preprint_neurips_formal_ml_scitech.pdf},
-  HAL_ID = {hal-04659802},
-  HAL_VERSION = {v1},
+@article{Agrawal_2025,
+doi = {10.1088/2632-2153/ad8e2b},
+url = {https://dx.doi.org/10.1088/2632-2153/ad8e2b},
+year = {2025},
+month = {jan},
+publisher = {IOP Publishing},
+volume = {6},
+number = {1},
+pages = {015024},
+author = {Agrawal, Atul and Ravi, Kislaya and Koutsourelakis, Phaedon-Stelios and Bungartz, Hans-Joachim},
+title = {Stochastic black-box optimization using multi-fidelity score function estimator},
+journal = {Machine Learning: Science and Technology}
 }
 ```
