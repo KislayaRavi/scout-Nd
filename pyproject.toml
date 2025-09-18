@@ -9,10 +9,10 @@ packages = [{include = "scout_nd"}]
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.13"
-numpy = "^1.25.2"
-torch = "^2.0.1"
-scipy = "^1.11.1"
-matplotlib = "^3.7.2"
+numpy = "^1.2.5"
+torch = "^2.7.0"
+scipy = "^1.15.2"
+matplotlib = "^3.10.1"
 
 
 [build-system]

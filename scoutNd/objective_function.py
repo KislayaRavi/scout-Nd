@@ -70,7 +70,7 @@ class ObjectiveAbstract(ABC):
 
     def deterministic_penalty_definition(self, constraint: callable, mean: float, 
                                          samples: np.ndarray, grad_logpdf_val: np.ndarray):
-        """Penalty term for determinitic constraints.
+        """Penalty term for deterministic constraints.
 
         Parameters
         ----------
@@ -243,7 +243,8 @@ class ObjectiveAbstract(ABC):
         return samples
 
     def function_wrapper(self, x:np.ndarray):
-        """_summary_
+        """Function  wrapper to evaluate the augmented function and the gradient of the augmented function.
+        The augmented function is the sum of the original function and the penalty term.
 
         Parameters
         ----------
@@ -291,7 +292,7 @@ class NoVarianceReduction(ObjectiveAbstract):
 
     def estimator_mean_and_derivative(self, func: callable, mean: np.ndarray, 
                                       samples: np.ndarray, grad_logpdf_val: np.ndarray):
-        """_summary_
+        """Estimates the mean of the augmented function and the gradient with respect to the parameters of the distribution.
 
         Parameters
         ----------

@@ -121,6 +121,14 @@ class Stochastic_Optimizer():
         self.optimizer.param_groups[0]['params'][0].data[self.dim:] = torch.tensor(self.initial_val[self.dim:].clone().detach(), requires_grad=True)
 
     def create_optimizer(self, name_optimizer:str, **optimizer_parameters:dict):
+        """Creates the optimizer for the given parameters.
+        Parameters
+        ----------
+        name_optimizer : str
+            Name of the optimizer. Currently only Adam is implemented.
+        optimizer_parameters : dict 
+            Parameters for the optimizer. For detail refer the torch.optim documentation.
+        """
         name_optimizer = name_optimizer.lower()
         if self.name_optimizer is None:
             self.name_optimizer, self.optimizer_parameters = name_optimizer, optimizer_parameters

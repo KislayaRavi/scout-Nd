@@ -141,10 +141,11 @@ def compare_optimize(sigma,mean_init :int,plot_name:str,no_sample=64,**kwargs):
     optimizer.create_optimizer('Adam', lr=1e-1)
     num_steps = 500
     optimizer.optimize(num_steps=num_steps)
-    mean_evo = np.zeros((num_steps, dim))
-    var_evo = np.zeros((num_steps, dim))
+    num_actual_steps = len(optimizer.stored_results)
+    mean_evo = np.zeros((num_actual_steps, dim))
+    var_evo = np.zeros((num_actual_steps, dim))
     # convert list to array
-    for i in range(num_steps):
+    for i in range(num_actual_steps):
         mean_evo[i,:] = optimizer.stored_results[i].detach().numpy()[:dim]
         var_evo[i,:] = np.exp(optimizer.stored_results[i].detach().numpy()[dim:])
     
@@ -154,7 +155,7 @@ def compare_optimize(sigma,mean_init :int,plot_name:str,no_sample=64,**kwargs):
     # plot var evolution
     fig = plt.figure()
     ax = fig.add_subplot(111)
-    no_calls = np.linspace(0, no_sample*num_steps, num_steps)
+    no_calls = np.linspace(0, no_sample*(num_actual_steps-1), num_actual_steps-1)
     ax.semilogy(no_calls,val, label=r'$\sigma_1^2$')
     #ax.semilogy(var_evo[1:,1],'b', label=r'$\sigma_2^2$')
     ax.set_xlabel(r'$iterations$')
@@ -162,7 +163,7 @@ def compare_optimize(sigma,mean_init :int,plot_name:str,no_sample=64,**kwargs):
     ax.legend()
     ax.grid()
     plt.tight_layout()  
-    plt.savefig(f'figures/ackley_optimization_var_evolution_{plot_name}' + f'sigma_{sigma}'+'.pdf')
+    # plt.savefig(f'figures/ackley_optimization_var_evolution_{plot_name}' + f'sigma_{sigma}'+'.pdf')
     plt.show()
 
 
@@ -195,7 +196,7 @@ def compare_optimize(sigma,mean_init :int,plot_name:str,no_sample=64,**kwargs):
     # add colorbar
     cbar = plt.colorbar(h, ax=ax)
     plt.tight_layout()
-    plt.savefig(f'figures/ackley_optimization_mean_evolution_contour_{plot_name}' + f'sigma_{sigma}'+'.pdf')
+    # plt.savefig(f'figures/ackley_optimization_mean_evolution_contour_{plot_name}' + f'sigma_{sigma}'+'.pdf')
     plt.show()
 
     # plot mean evolution
@@ -209,7 +210,7 @@ def compare_optimize(sigma,mean_init :int,plot_name:str,no_sample=64,**kwargs):
     ax.legend()
     ax.grid()
     plt.tight_layout()  
-    plt.savefig(f'figures/ackley_optimization_mean_evolution_{plot_name}' + f'sigma_{sigma}'+'.pdf')
+    # plt.savefig(f'figures/ackley_optimization_mean_evolution_{plot_name}' + f'sigma_{sigma}'+'.pdf')
     plt.show()
 
     # plot var evolution
@@ -223,7 +224,7 @@ def compare_optimize(sigma,mean_init :int,plot_name:str,no_sample=64,**kwargs):
     ax.legend()
     ax.grid()
     plt.tight_layout()  
-    plt.savefig(f'figures/ackley_optimization_var_evolution_{plot_name}' + f'sigma_{sigma}'+'.pdf')
+    # plt.savefig(f'figures/ackley_optimization_var_evolution_{plot_name}' + f'sigma_{sigma}'+'.pdf')
     plt.show()
 
 def compare_natural_fn_vals(sigma,mean_init :int,plot_name:str,no_sample=64,plotting=True,**kwargs):
@@ -274,7 +275,7 @@ def compare_natural_fn_vals(sigma,mean_init :int,plot_name:str,no_sample=64,plot
         ax.legend()
         ax.grid()
         plt.tight_layout()  
-        plt.savefig(f'figures/ackley_optimization_f_x_lr_{lr}_{plot_name}' + f'sigma_{sigma}'+'.pdf')
+        # plt.savefig(f'figures/ackley_optimization_f_x_lr_{lr}_{plot_name}' + f'sigma_{sigma}'+'.pdf')
         plt.show()
     return val_nat_grad, val_no_nat_grad
 
@@ -317,7 +318,8 @@ if compare_fim_fx:
     #ax.legend()
     ax.grid()
     plt.tight_layout()
-    plt.savefig(f'figures/ackley_optimization_f_x_lr_fim_comparision_different_samples'+'.pdf')
+    # plt.savefig(f'figures/ackley_optimization_f_x_lr_fim_comparision_different_samples'+'.pdf')
+    plt.show()
     
 
     
