@@ -13,7 +13,28 @@ We introduce SCOUT-Nd (Stochastic Constrained Optimization for N Dimensions) and
 
 The scripts to reproduce the studies in the paper will be made available upon publication. 
 
-### Benchmark codes [here](https://gitlab.lrz.de/ga83tum/scout-nd-benchmarking) (To be updated soon)
+### Benchmark codes
+
+The scripts used to reproduce the benchmark studies in the paper are in the
+[`benchmarking/`](./benchmarking/) directory.
+
+| File | Purpose |
+|------|---------|
+| `benchmarks.py` | Benchmark function suite (18 functions, HF/LF variants) |
+| `common_data.py` | Shared constants: sample-size schedule and seed list |
+| `run_scout.py` | Single-fidelity SCOUT-Nd runner |
+| `run_mf_scout.py` | Multi-fidelity SCOUT-Nd runner |
+| `run_scipy.py` | SciPy baseline (`trust-constr`, etc.) |
+| `run_botorch.py` | BoTorch Bayesian-optimisation baseline |
+| `run_cbo.py` | Constrained Bayesian-optimisation baseline (`bayes_opt`) |
+| `cutest.py` | CUTEst problem listing (requires `pycutest`) |
+| `adaptive_sample_plots.py` | Adaptive vs fixed sample size study + figures |
+| `derivative_correction_plot.py` | Constraint-derivative correction visualisation |
+| `drift_term_plot.py` | Gradient-estimator drift / convergence-rate analysis |
+| `evolution_plot.py` | Design-variable / objective evolution plots |
+| `moore_plot.py` | Data / performance profile plots (More--Wild style) |
+
+generated PDF figures from the paper are in `benchmarking/`.
 ### Real world example 
 - Windfarm layout optimization [here](https://github.com/atulag0711/windfarm_layout_optimization)
 - Pipe shape optimization [code](), [student thesis](https://mediatum.ub.tum.de/doc/1749210/1749210.pdf) 
